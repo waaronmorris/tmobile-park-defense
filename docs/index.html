@@ -611,6 +611,47 @@ function drawWhisker(sel, rows, opts){
   return g;
 }
 
+/* A strip of every park along the same axis as the bars beneath it.
+   The league line and the median park are only a few pixels apart, so drawing them as
+   two labelled rules would just collide. Showing the parks themselves works better:
+   the pile-up on one side and the lone outlier on the other IS the skew, and the caption
+   puts a number on it -- how far the upper half of the league reaches versus the lower. */
+function drawDistStrip(svg, values, x, opts){
+  const {top, h = 15, ref = 0, fmt = fp, unit = ""} = opts;
+  const v = values.filter(d => d != null).slice().sort(d3.ascending);
+  if (v.length < 8) return;
+  const q = p => d3.quantile(v, p);
+  const med = q(0.5), below = med - q(0.10), above = q(0.90) - med;
+  const g = svg.append("g").attr("class","dist-strip");
+
+  // Every park, one tick. Overlaps darken, so density reads without a histogram.
+  g.selectAll("line.t").data(v).join("line")
+    .attr("x1", d => x(d)).attr("x2", d => x(d))
+    .attr("y1", top).attr("y2", top + h)
+    .attr("stroke", cssVar("--dist")).attr("stroke-width", 2).attr("opacity", .5);
+
+  g.append("line").attr("x1", x(med)).attr("x2", x(med))
+    .attr("y1", top - 4).attr("y2", top + h + 4)
+    .attr("stroke", cssVar("--dist")).attr("stroke-width", 1.5).attr("stroke-dasharray", "3,2");
+  g.append("line").attr("x1", x(ref)).attr("x2", x(ref))
+    .attr("y1", top - 4).attr("y2", top + h + 4)
+    .attr("stroke", cssVar("--ink-2")).attr("stroke-width", 1.5);
+
+  // Caption gets its own line above the strip; the two rule labels sit on either side of
+  // it. All three shared one baseline in the first pass and overlapped.
+  g.append("text").attr("x", opts.right).attr("y", top - 19).attr("text-anchor","end")
+    .attr("font-size", 8.5).attr("fill", cssVar("--faint"))
+    .text("skew: upper half of the league reaches " + fmt(above) + unit
+          + ", lower half " + fmt(below) + unit + " — " + (above/below).toFixed(1) + "×");
+  g.append("text").attr("x", x(ref) + 6).attr("y", top - 5)
+    .attr("font-size", 8.5).attr("fill", cssVar("--ink-2")).attr("letter-spacing",".08em")
+    .text("LEAGUE");
+  g.append("text").attr("x", x(med) - 6).attr("y", top + h + 13).attr("text-anchor","end")
+    .attr("font-size", 8.5).attr("fill", cssVar("--dist")).attr("letter-spacing",".08em")
+    .text("MEDIAN PARK");
+  return g;
+}
+
 /* The shared caption every panel carries, so the encoding is stated once per chart. */
 function encodingKey(nLabel){
   return '<span style="display:inline-flex;align-items:center;gap:5px">'+
@@ -1070,7 +1111,7 @@ function renderField(){
 /* ---------- carry ranking ---------- */
 function renderCarry(){
   const rows=summary.filter(d=>d.carry_ft!=null).sort((a,b)=>b.carry_ft-a.carry_ft);
-  const M={t:10,r:172,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
+  const M={t:74,r:172,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#carryChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(d.carry_ft));
@@ -1108,6 +1149,8 @@ function renderCarry(){
     .attr("font-size",9).attr("fill",cssVar("--ink-3")).text(d=>f1(d.carry_ft));
   svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
     .attr("stroke",cssVar("--ink-3"));
+  drawDistStrip(svg, rows.map(d=>d.carry_ft), x,
+    {top:34, right:W-M.r, ref:0, fmt:d=>d3.format(".1f")(d), unit:" ft"});
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(9).tickFormat(d=>d+"'"));
 }
@@ -1270,7 +1313,7 @@ function renderK(){
 function renderRank(){
   const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
   const rows=summary.slice().sort((a,b)=>rel(a)-rel(b));
-  const M={t:28,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
+  const M={t:74,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#rankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(rel(d)));
@@ -1313,9 +1356,8 @@ function renderRank(){
     .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.short||d.name);
   svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
     .attr("stroke",cssVar("--ink-3"));
-  svg.append("text").attr("x",x(0)).attr("y",M.t-9).attr("text-anchor","middle")
-    .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em")
-    .text("LEAGUE AVERAGE");
+  drawDistStrip(svg, rows.map(rel), x,
+    {top:34, right:W-M.r, ref:0, fmt:d=>ba3(d), unit:""});
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
 
