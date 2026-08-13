@@ -24,7 +24,7 @@ specifically; the carry deficit is cold air plus sea level. See
 
 ## Headline findings
 
-2021–2026 regular season, 700,414 batted balls, all 30 parks.
+2021–2026 regular season, 699,693 batted balls, all 30 parks.
 
 | Measure | T-Mobile Park | Rank | Read |
 |---|---|---|---|
@@ -34,7 +34,7 @@ specifically; the carry deficit is cold air plus sea level. See
 | Carry vs league expectation | **−3.5 ft** | 4th-shortest | Physics, not defense |
 | Strikeout park factor | **1.123** | 1st of 32 | 12% more Ks than the same people manage elsewhere |
 
-Negative in **all six seasons** (−.009 to −.019 vs league), which is the "continually" part.
+Negative in **all six seasons** (−.009 to −.020 vs league), which is the "continually" part.
 
 ### It does not eat home runs
 
@@ -45,10 +45,10 @@ Rate of each hit type per ball in play at T-Mobile, against the league:
 | Triples | **−49%** | 2nd of 32 |
 | Doubles | −10% | 3rd |
 | Singles | −5% | 3rd |
-| Home runs | **+4%** | 19th |
+| Home runs | **+5%** | 19th |
 
-And by batted-ball type (BA − xBA relative to league): fly balls **−.027**, line drives
-**−.025**, ground balls −.004, pop-ups +.001.
+And by batted-ball type (BA − xBA relative to league): fly balls **−.026**, line drives
+**−.023**, ground balls −.003, pop-ups +.001.
 
 So the park is not a home-run suppressor — the fences are short enough (average 367 ft,
 average wall height 7.6 ft vs an MLB mean of 9.6) that the 2013 move-in offsets the dead air.
@@ -57,14 +57,17 @@ spray-angle gradient below does its work.
 
 ### The blind spot, quantified
 
-Take balls hit 95–100 mph at 20–25°. Statcast assigns them all essentially the same xBA,
-**.301**, across the entire field. The actual batting average within that one cell:
+Take the 9,025 balls hit 95–100 mph at 20–25°. Statcast assigns them all essentially the same xBA,
+**.302**, across the entire field — it holds to within four points in every direction.
+The actual batting average within that one cell, by 5° bin:
 
-| Direction | Actual BA |
-|---|---|
-| Down the lines (±45°) | ~.97 |
-| The gaps (±15–20°) | ~.41 |
-| Dead center (−10° to +5°) | **.021** |
+| Direction | Actual BA | Balls |
+|---|---|---|
+| Left-field line, −50° to −45° | **.990** | 104 |
+| Left-centre gap, −20° to −15° | .488 | 508 |
+| Straightaway centre, 0° to +5° | **.021** | 569 |
+| Right-centre gap, +15° to +20° | .445 | 548 |
+| Right-field line, +45° to +50° | **.971** | 140 |
 
 A spread of **.969** in outcome that the model treats as identical contact. That gradient is
 what a ballpark's geometry acts on, and it is invisible to xBA by construction.
