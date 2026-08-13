@@ -3,7 +3,8 @@
 Why Seattle is continually one of the lowest-offense parks in MLB, measured from
 pitch-level Statcast data pulled with [`plyball`](https://plyball.readthedocs.io/).
 
-**Interactive visualization:** https://claude.ai/code/artifact/51b102c7-61fd-41fc-87ec-1a35cee7cc38
+**Application:** https://waaronmorris.github.io/tmobile-park-defense/
+**Write-up:** https://morris-labs.dev/blog/the-xba-blind-spot
 
 ## The argument
 
@@ -204,12 +205,16 @@ in black honeycomb in July 2003, angle never altered) remains unproven.
 scripts/
   pull_statcast.py   chunked, resumable Savant pull via plyball -> data/raw/{bip,nonbip}/
   parks.py           park identity by (home_team, season)
-  analyze.py         all metrics -> viz/data/*.json
-  build_viz.py       inlines d3 + columnar-packed data -> viz/index.html
+  stats.py           Wilson / delta-method / mean intervals
+  analyze.py         all metrics + intervals -> viz/data/*.json
+  build_viz.py       inlines d3 + columnar-packed data -> one standalone file
+  export_for_post.py small extracts for the write-up's server-rendered charts
 viz/
   template.html      the page (placeholders for d3 and data)
-  index.html         built, self-contained, ~0.9 MB
-data/raw/            233 MB of parquet chunks, resumable
+  data/              aggregates, committed, so a clone can rebuild
+  vendor/d3.min.js   inlined at build time
+docs/index.html      the built application, ~1.1 MB, served by GitHub Pages
+data/raw/            233 MB of parquet chunks, gitignored, resumable
 ```
 
 ## Reproducing
@@ -222,7 +227,7 @@ uv pip install --python .venv/bin/python -e ../plyball pandas pyarrow numpy
 .venv/bin/python scripts/pull_statcast.py 2025      # or one season at a time, in parallel
 
 PYTHONPATH=scripts .venv/bin/python scripts/analyze.py
-.venv/bin/python scripts/build_viz.py
+.venv/bin/python scripts/build_viz.py            # -> docs/index.html, served by Pages
 ```
 
 The pull skips any chunk already on disk, so it is safe to interrupt and re-run, and safe to

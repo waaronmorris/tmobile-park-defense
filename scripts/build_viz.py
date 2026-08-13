@@ -2,8 +2,12 @@
 Assemble the self-contained visualization.
 
 Reads viz/template.html, injects the vendored d3 bundle and a columnar-packed copy of
-the analysis JSON, and writes viz/index.html. Published artifacts cannot fetch anything
-across the network, so everything has to live in the one file.
+the analysis JSON, and writes one standalone HTML file. Everything lives in that file --
+no stylesheet, no script, no font, no data fetched at runtime -- so it can be dropped on
+any static host and works offline.
+
+    build_viz.py                      -> docs/index.html   (GitHub Pages)
+    build_viz.py --out <path>         -> anywhere else     (e.g. the morris-labs copy)
 
 Records are packed columnar (one array per field, plus a shared string table) because the
 row-of-objects form repeats every key thousands of times and roughly triples the payload.
@@ -62,18 +66,10 @@ def main():
     body = tpl.replace("/*__D3__*/", d3).replace('"__DATA__"', payload)
 
     args = sys.argv[1:]
-    target = "site" if "--site" in args else "artifact"
-    if target == "artifact":
-        # The artifact host supplies <!doctype>, <head> and <body> itself, so the
-        # template is published exactly as-is.
-        out = ROOT / "viz" / "index.html"
-    else:
-        out = Path(args[args.index("--out") + 1]) if "--out" in args else ROOT / "viz" / "site.html"
-        body = wrap_document(body)
-        out.parent.mkdir(parents=True, exist_ok=True)
-
-    out.write_text(body)
-    print(f"\nwrote {out} [{target}] ({out.stat().st_size/1024/1024:.2f} MB)")
+    out = Path(args[args.index("--out") + 1]) if "--out" in args else ROOT / "docs" / "index.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(wrap_document(body))
+    print(f"\nwrote {out} ({out.stat().st_size/1024/1024:.2f} MB)")
 
 
 SITE_NAV = """
@@ -102,7 +98,7 @@ SITE_CSS = """
 
 
 def wrap_document(body: str) -> str:
-    """Turn the artifact fragment into a standalone page for static hosting."""
+    """Wrap the template fragment in a complete HTML document for static hosting."""
     title = re.search(r"<title>(.*?)</title>", body, re.S)
     title_text = title.group(1).strip() if title else "The xBA Blind Spot"
     body = body.replace(title.group(0), "", 1) if title else body
