@@ -25,7 +25,7 @@ DATA = ROOT / "viz" / "data"
 # grid only, and the per-park copy is ~1 MB of payload nothing reads.
 FILES = ["summary", "park_season", "league_grid",
          "league_spray", "league_spray_coarse", "park_spray", "field_map", "carry_spray",
-         "outcome_mix", "btype_gap"]
+         "outcome_mix", "btype_gap", "spray_dist"]
 
 
 def pack(records):

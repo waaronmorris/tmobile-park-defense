@@ -44,6 +44,7 @@
   --cold:#3E86C9;
   --hot:#F2833C;
   --mid:#5C6B67;
+  --dist:#5D707C;      /* spread across parks; cool, to separate it from the accent */
 
   /* -- names the chart code already binds to -- */
   --ground:var(--board);
@@ -507,6 +508,7 @@ const pkSpray   = D.park_spray || [];
 const fieldMap  = D.field_map || [];
 const parkSeason= D.park_season || [];
 const outcomeMix= D.outcome_mix || [];
+const sprayDist = D.spray_dist || [];
 const btypeGap  = D.btype_gap || [];
 
 const nameOf = {}; summary.forEach(d=>nameOf[d.park]=d.name);
@@ -587,6 +589,8 @@ function showTip(ev, html){
 }
 function hideTip(){ tip.style("opacity",0); }
 const f3 = d3.format(".3f"), fp = d3.format("+.3f"), f1 = d3.format("+.1f"), fi = d3.format(",");
+/* Baseball drops the leading zero, but only when there is one: 1.000 is not ".000". */
+const ba3 = v => (v==null ? "\u2014" : (v >= 1 ? f3(v) : f3(v).slice(1)));
 
 /* ---------- state ---------- */
 let PARK = "SEA";
@@ -594,9 +598,9 @@ let BAND = null;              // {ev_band, la_band} against the fine league grid
 const evOrder = ["<80","80-90","90-95","95-100","100-105","105+"];
 const laOrder = ["<0","0-10","10-20","20-25","25-30","30-40","40+"];
 
-/* map a fine band onto the coarse per-park bands */
-function coarseEv(b){ return b==="<80"?"<90" : b==="80-90"?"<90" : (b==="90-95"||b==="95-100")?"90-100":"100+"; }
-function coarseLa(b){ return b==="<0"?"<10" : b==="0-10"?"<10" : (b==="10-20"||b==="20-25")?"10-25" : b==="30-40"?"25-40" : b==="25-30"?"25-40":"40+"; }
+/* The park series carries the SAME contact bands as the league series and differs only
+   in spray-bin width, so the two curves describe one population and can be compared. */
+const sameBand = d => d.ev_band===BAND.ev_band && d.la_band===BAND.la_band;
 
 /* ---------- controls ---------- */
 const parkSel = d3.select("#parkSel");
@@ -633,9 +637,9 @@ function renderReadout(){
   const carrySorted = summary.filter(d=>d.carry_ft!=null).slice().sort((a,b)=>a.carry_ft-b.carry_ft);
   const cRank = carrySorted.findIndex(d=>d.park===PARK)+1;
   const items = [
-    {k:"Batting average", v:f3(s.ba).slice(1),
+    {k:"Batting average", v:ba3(s.ba),
      s:(s.hits!=null?fi(s.hits)+" hits on "+fi(s.bip)+" balls in play":"on "+fi(s.bip)+" balls in play")},
-    {k:"Expected (xBA)",  v:f3(s.xba).slice(1),
+    {k:"Expected (xBA)",  v:ba3(s.xba),
      s:(s.xba_sum!=null
         ? fi(Math.round(s.xba_sum))+" expected — "+
           (s.hits_vs_xba<0 ? "short by "+fi(Math.round(-s.hits_vs_xba))
@@ -730,8 +734,7 @@ function renderSpray(){
 
   const lg = lgSpray.filter(d=>d.ev_band===BAND.ev_band && d.la_band===BAND.la_band)
                     .sort((a,b)=>a.spray_bin-b.spray_bin);
-  const pk = pkSpray.filter(d=>d.park===PARK && d.ev_c===coarseEv(BAND.ev_band) && d.la_c===coarseLa(BAND.la_band))
-                    .sort((a,b)=>a.spray_c-b.spray_c);
+  const pk = pkSpray.filter(d=>d.park===PARK && sameBand(d)).sort((a,b)=>a.spray_c-b.spray_c);
 
   if(!lg.length){ svg.append("text").attr("x",W/2).attr("y",H/2).attr("text-anchor","middle")
     .attr("font-size",11).text("not enough batted balls in this cell");
@@ -754,27 +757,58 @@ function renderSpray(){
   const xbaLevel=d3.mean(lg,d=>d.xba);
   svg.append("line").attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(xbaLevel)).attr("y2",y(xbaLevel))
     .attr("stroke",cssVar("--ink-3")).attr("stroke-width",1.5).attr("stroke-dasharray","6,4");
-  svg.append("text").attr("x",W-M.r-4).attr("y",y(xbaLevel)-6).attr("text-anchor","end")
-    .attr("font-size",9.5).attr("fill",cssVar("--ink-3")).text("xBA "+f3(xbaLevel));
+  svg.append("text").attr("x",M.l+6).attr("y",y(xbaLevel)-6).attr("text-anchor","start")
+    .attr("font-size",9.5).attr("fill",cssVar("--ink-3")).text("xBA "+ba3(xbaLevel));
 
   // Wilson bands. Several of these bins sit near .02 or .99, where a symmetric
   // interval would run off the end of the scale, so the bounds come from the
   // analysis rather than being recomputed here.
   const line=d3.line().x(d=>x(d.spray_bin+2.5)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
-  if(lg[0]&&lg[0].ba_lo!=null){
-    svg.append("path").datum(lg).attr("fill",cssVar("--ink-2")).attr("opacity",.16)
-      .attr("d",d3.area().x(d=>x(d.spray_bin+2.5)).y0(d=>y(d.ba_lo)).y1(d=>y(d.ba_hi))
+
+  /* Where the thirty parks actually live, at each angle. The league mean line alone
+     cannot say whether a park is unusual -- a park under the mean may be entirely
+     ordinary. These bands are the spread ACROSS parks, so the selected park reads as
+     inside or outside the pack, and the asymmetry of the band about the mean is the
+     skew rather than a claim about it. */
+  const dist=sprayDist.filter(sameBand).sort((a,b)=>a.spray_c-b.spray_c);
+  if(dist.length){
+    const band=(lo,hi,op)=>svg.append("path").datum(dist)
+      .attr("fill",cssVar("--dist")).attr("opacity",op)
+      .attr("d",d3.area().x(d=>x(d.spray_c+3.75)).y0(d=>y(d[lo])).y1(d=>y(d[hi]))
         .curve(d3.curveMonotoneX));
+    band("p10","p90",.13);
+    band("p25","p75",.22);
+    svg.append("path").datum(dist).attr("fill","none")
+      .attr("stroke",cssVar("--ink-3")).attr("stroke-width",1).attr("stroke-dasharray","1,3")
+      .attr("d",d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.p50)).curve(d3.curveMonotoneX));
+    svg.append("g").selectAll("rect.dhit").data(dist).join("rect")
+      .attr("x",d=>x(d.spray_c)).attr("width",d=>x(d.spray_c+7.5)-x(d.spray_c))
+      .attr("y",M.t).attr("height",H-M.b-M.t).attr("fill","transparent")
+      .on("mousemove",(e,d)=>showTip(e,"<b>"+d.spray_c+"° to "+(d.spray_c+7.5)+"°</b><br>"+
+        "across "+d.parks+" parks<br>middle half "+ba3(d.p25)+" to "+ba3(d.p75)+
+        "<br>10th–90th "+ba3(d.p10)+" to "+ba3(d.p90)+
+        "<br>median "+ba3(d.p50)))
+      .on("mouseleave",hideTip);
   }
   svg.append("path").datum(lg).attr("fill","none").attr("stroke",cssVar("--ink-2"))
     .attr("stroke-width",1.7).attr("opacity",.55).attr("d",line);
 
   if(pk.length){
     const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+    // Per-point whiskers rather than a filled band: one park in one 7.5-degree bin holds
+    // only tens of balls, so its 95% interval is wide enough that a filled band swamps the
+    // park-spread band underneath it. Whiskers carry the same number and match the
+    // encoding used on every other chart here.
     if(pk[0].ba_lo!=null){
-      svg.append("path").datum(pk).attr("fill",cssVar("--accent")).attr("opacity",.16)
-        .attr("d",d3.area().x(d=>x(d.spray_c+3.75)).y0(d=>y(d.ba_lo)).y1(d=>y(d.ba_hi))
-          .curve(d3.curveMonotoneX));
+      const g=svg.append("g").attr("class","pk-err");
+      g.selectAll("line.v").data(pk).join("line")
+        .attr("x1",d=>x(d.spray_c+3.75)).attr("x2",d=>x(d.spray_c+3.75))
+        .attr("y1",d=>y(d.ba_lo)).attr("y2",d=>y(d.ba_hi))
+        .attr("stroke",cssVar("--accent")).attr("stroke-width",1).attr("opacity",.55);
+      [["ba_lo"],["ba_hi"]].forEach(([k])=>g.selectAll(null).data(pk).join("line")
+        .attr("x1",d=>x(d.spray_c+3.75)-3).attr("x2",d=>x(d.spray_c+3.75)+3)
+        .attr("y1",d=>y(d[k])).attr("y2",d=>y(d[k]))
+        .attr("stroke",cssVar("--accent")).attr("stroke-width",1).attr("opacity",.55));
     }
     svg.append("path").datum(pk).attr("fill","none").attr("stroke",cssVar("--accent"))
       .attr("stroke-width",2.6).attr("d",lineP);
@@ -782,7 +816,7 @@ function renderSpray(){
       .attr("cx",d=>x(d.spray_c+3.75)).attr("cy",d=>y(d.ba)).attr("r",3.2)
       .attr("fill",cssVar("--accent"))
       .on("mousemove",(e,d)=>showTip(e,"<b>"+nameOf[PARK]+"</b><br>spray "+d.spray_c+"° to "+(d.spray_c+7.5)+
-        "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+        "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
         "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
       .on("mouseleave",hideTip);
   }
@@ -790,7 +824,7 @@ function renderSpray(){
     .attr("cx",d=>x(d.spray_bin+2.5)).attr("cy",d=>y(d.ba)).attr("r",2.1)
     .attr("fill",cssVar("--ink-2")).attr("opacity",.6)
     .on("mousemove",(e,d)=>showTip(e,"<b>League</b><br>spray "+d.spray_bin+"° to "+(d.spray_bin+5)+
-      "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+      "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
       "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
     .on("mouseleave",hideTip);
 
@@ -810,24 +844,27 @@ function renderSpray(){
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(7).tickFormat(d=>d+"°"));
   svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
-    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>f3(d).slice(1)));
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>ba3(d)));
   svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",12)
     .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text("BATTING AVERAGE");
 
   d3.select("#sprayKey").html(
     '<span style="color:var(--accent)">●</span> '+nameOf[PARK]+
-    ' &nbsp; <span style="color:var(--ink-2)">●</span> League'+
+    ' &nbsp; <span style="color:var(--ink-2)">●</span> League mean'+
+    ' &nbsp; <span style="color:var(--dist)">▓</span> middle half of parks'+
     ' &nbsp; <span style="color:var(--ink-3)">--</span> xBA');
 
-  const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba), ba3=v=>f3(v).slice(1);
+  const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba);
   const nTot=d3.sum(lg,d=>d.n), nMin=d3.min(lg,d=>d.n);
   d3.select("#sprayNote").html(
     "In this cell xBA sits at "+ba3(xbaLevel)+" everywhere. The real batting average runs from <b>"+
     ba3(lo)+"</b> to <b>"+ba3(hi)+"</b> depending only on direction — a spread of "+
     ba3(hi-lo)+" that the model treats as identical contact."+
     "<br><span style='opacity:.75'>"+fi(nTot)+" batted balls across "+lg.length+
-    " bins, thinnest "+fi(nMin)+". Shaded bands are 95% Wilson intervals"+
-    (pk.length?"; the park curve is coarser because one park holds a thirtieth of the contact.":".")+
+    " bins, thinnest "+fi(nMin)+". The grey band is where the middle half and the middle "+
+    "80% of the thirty parks fall in each bin, so a park inside it is ordinary however far "+
+    "it sits from the mean; its asymmetry about the mean line is the skew. Both curves use "+
+    "the same contact band and differ only in spray-bin width."+
     "</span>");
 }
 
@@ -880,7 +917,7 @@ function drawCellFan(sel, rows, opts){
     .on("mousemove",(e,d)=>showTip(e,
       "<b>"+wedge(d)[0]+"° to "+wedge(d)[1]+"°</b><br>"+
       "lands about "+Math.round(dist(d))+" ft<br>"+
-      "BA "+f3(ba(d))+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+      "BA "+f3(ba(d))+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
       "<br>"+fi(n(d))+" balls"))
     .on("mouseleave",hideTip);
 
@@ -893,8 +930,7 @@ function drawCellFan(sel, rows, opts){
 function renderCellFan(){
   const lg=lgSpray.filter(d=>d.ev_band===BAND.ev_band&&d.la_band===BAND.la_band&&d.dist!=null)
                   .sort((a,b)=>a.spray_bin-b.spray_bin);
-  const pk=pkSpray.filter(d=>d.park===PARK&&d.ev_c===coarseEv(BAND.ev_band)&&
-                             d.la_c===coarseLa(BAND.la_band)&&d.dist!=null)
+  const pk=pkSpray.filter(d=>d.park===PARK&&sameBand(d)&&d.dist!=null)
                   .sort((a,b)=>a.spray_c-b.spray_c);
 
   d3.select("#cellFanTitle").text(BAND.ev_band+" mph at "+BAND.la_band+"°, on the field");
@@ -915,9 +951,9 @@ function renderCellFan(){
     d3.select("#cellFanNote").html(
       "Every wedge sits at the median distance those balls actually travelled, so the arc is "+
       "roughly where this contact lands. Straight at "+Math.round(near.dist)+" ft it is worth <b>"+
-      f3(near.ba).slice(1)+"</b>; the same contact toward "+
+      ba3(near.ba)+"</b>; the same contact toward "+
       (best.spray_bin<0?"left":"right")+" field at "+Math.round(best.dist)+" ft is worth <b>"+
-      f3(best.ba).slice(1)+"</b>. Same speed, same angle, same xBA.");
+      ba3(best.ba)+"</b>. Same speed, same angle, same xBA.");
   } else d3.select("#cellFanNote").text("");
 }
 
@@ -953,7 +989,7 @@ function drawField(svgSel, rows, title){
       })
       .on("mousemove",(e,d)=>showTip(e,"<b>"+Math.round(d.db)+"–"+Math.round(d.db+20)+" ft, "+
         d.sb+"°</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+"<br>diff "+fp(d.ba-d.xba)+
-        (d.gap_sem!=null?" ± "+f3(Z95*d.gap_sem).slice(1):"")+
+        (d.gap_sem!=null?" ± "+ba3(Z95*d.gap_sem):"")+
         "<br>"+fi(d.n)+" balls"+
         (d.gap_sem!=null && Math.abs(d.ba-d.xba)<=Z95*d.gap_sem?"<br><i>interval spans zero</i>":"")))
       .on("mouseleave",hideTip);
@@ -1115,7 +1151,7 @@ function renderBtype(){
     .attr("fill",d=>c(d.rel))
     .on("mousemove",(e,d)=>showTip(e,"<b>"+BT_LABEL[d.bb_type]+"</b><br>BA − xBA "+fp(d.gap)+
       "<br>league "+fp(d.lg_gap)+"<br>vs league "+fp(d.rel)+
-      (d.moe!=null?" ± "+f3(d.moe).slice(1):"")+"<br>"+fi(d.n)+" balls"))
+      (d.moe!=null?" ± "+ba3(d.moe):"")+"<br>"+fi(d.n)+" balls"))
     .on("mouseleave",hideTip);
 
   drawWhisker(svg, rows.filter(d=>d.moe!=null), {
@@ -1214,7 +1250,7 @@ function renderRank(){
     .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>"+
       (d.hits!=null?fi(d.hits)+" hits vs "+fi(Math.round(d.xba_sum))+" expected<br>":"")+
       "BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
-      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+f3(moe(d)).slice(1):"")+
+      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+ba3(moe(d)):"")+
       "<br>"+fi(d.bip)+" balls in play"+
       (d.gap_z!=null?" &middot; "+d3.format(".1f")(Math.abs(d.gap_z))+"σ":"")+
       (d.hits_vs_lg!=null?"<br>"+d3.format("+,.0f")(d.hits_vs_lg)+" hits":"")+
@@ -1257,7 +1293,7 @@ function renderRank(){
       "<td>"+(d.hits==null?"—":fi(d.hits))+"</td>"+
       "<td>"+(d.xba_sum==null?"—":fi(Math.round(d.xba_sum)))+"</td>"+
       "<td>"+(d.hits_vs_lg==null?"—":d3.format("+,.0f")(d.hits_vs_lg))+"</td>"+
-      "<td>"+f3(d.ba).slice(1)+"</td><td>"+f3(d.xba).slice(1)+
+      "<td>"+ba3(d.ba)+"</td><td>"+ba3(d.xba)+
       "</td><td>"+fp(rel(d))+"</td><td>"+fp(d.adj_gap)+"</td>"+
       (hasK?("<td>"+(d.k_pct?d3.format(".1%")(d.k_pct):"—")+"</td><td>"+
         (d.k_pf==null?"—":d3.format(".3f")(d.k_pf))+"</td>"):"")+
@@ -1287,7 +1323,7 @@ function renderSeason(){
     .attr("y",d=>Math.min(y(0),y(rel(d)))).attr("height",d=>Math.abs(y(rel(d))-y(0)))
     .attr("fill",d=>gapColor(rel(d)))
     .on("mousemove",(e,d)=>showTip(e,"<b>"+d.season+"</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
-      "<br>vs league "+fp(rel(d))+(d.gap_moe!=null?" ± "+f3(d.gap_moe).slice(1):"")+
+      "<br>vs league "+fp(rel(d))+(d.gap_moe!=null?" ± "+ba3(d.gap_moe):"")+
       "<br>carry "+(d.carry_ft==null?"—":f1(d.carry_ft)+" ft")+
       "<br>"+fi(d.bip)+" balls in play"))
     .on("mouseleave",hideTip);
@@ -1345,7 +1381,7 @@ function renderPrecision(){
   };
   const fmtMoe=r=>{
     if(r.moe==null) return "—";
-    if(r.unit==="BA") return "± "+f3(r.moe).slice(1);
+    if(r.unit==="BA") return "± "+ba3(r.moe);
     if(r.unit==="ft") return "± "+d3.format(".2f")(r.moe);
     if(r.unit==="%")  return "± "+d3.format(".0f")(r.moe);
     return "± "+d3.format(".3f")(r.moe);

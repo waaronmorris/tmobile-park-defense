@@ -386,20 +386,51 @@ def main():
                      dist=("hc_dist", "median")).reset_index())
     lg_spray = add_ba_ci(lg_spray[lg_spray["n"] >= 30].copy())
     lg_spray["dist"] = lg_spray["dist"].round(1)
-    # A single park holds ~1/30th of the league's contact, so the per-park version of the
-    # same curve needs coarser bands to keep each cell above noise.
-    sp["ev_c"] = pd.cut(sp["ev"], [0, 90, 100, 200], labels=["<90", "90-100", "100+"])
-    sp["la_c"] = pd.cut(sp["la"], [-90, 10, 25, 40, 90],
-                        labels=["<10", "10-25", "25-40", "40+"])
+    # A single park holds ~1/30th of the league's contact, so the per-park curve needs
+    # wider bins. Widen the SPRAY bins only, and keep the exact same contact bands as the
+    # league curve it is plotted against.
+    #
+    # Widening the contact bands instead is what the first version did, and it was wrong:
+    # a park binned over 90-100 mph / 10-25 degrees was being drawn against a league line
+    # binned over 90-95 / 10-20, which is a systematically weaker population. That put
+    # every one of the thirty-two parks below the league line by construction. Spray-bin
+    # width carries no such bias, because it does not change the average contact quality
+    # inside the cell.
     sp["spray_c"] = (sp["spray"] // 7.5) * 7.5
-    pk_spray = (sp.groupby(["park", "ev_c", "la_c", "spray_c"], observed=True)
+    pk_spray = (sp.groupby(["park", "ev_band", "la_band", "spray_c"], observed=True)
                 .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
                      dist=("hc_dist", "median")).reset_index())
-    pk_spray = add_ba_ci(pk_spray[pk_spray["n"] >= 20].copy())
+    pk_spray = add_ba_ci(pk_spray[pk_spray["n"] >= 15].copy())
     pk_spray["dist"] = pk_spray["dist"].round(1)
-    lg_spray_c = (sp.groupby(["ev_c", "la_c", "spray_c"], observed=True)
-                  .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index())
-    lg_spray_c = add_ba_ci(lg_spray_c)
+    # League on the park's own spray binning, for a like-for-like reference line.
+    lg_spray_c = (sp.groupby(["ev_band", "la_band", "spray_c"], observed=True)
+                  .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
+                       dist=("hc_dist", "median")).reset_index())
+    lg_spray_c = add_ba_ci(lg_spray_c[lg_spray_c["n"] >= 30].copy())
+    lg_spray_c["dist"] = lg_spray_c["dist"].round(1)
+
+    # ---------- how the thirty parks spread at each spray angle ----------
+    # The league mean line answers "what happens on average". It cannot answer "is this
+    # park unusual", because a park sitting under the mean may still be entirely ordinary.
+    # These are the percentiles ACROSS parks in each bin, so the band is the league's own
+    # distribution and its asymmetry about the median is the skew, drawn rather than
+    # asserted.
+    dist_rows = []
+    for (evb, lab, spc), g in pk_spray.groupby(["ev_band", "la_band", "spray_c"], observed=True):
+        if len(g) < 12:            # too few parks clear the per-bin floor to describe a spread
+            continue
+        q = g["ba"].quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+        dist_rows.append({
+            "ev_band": evb, "la_band": lab, "spray_c": spc, "parks": int(len(g)),
+            "p10": round(float(q[0.10]), 4), "p25": round(float(q[0.25]), 4),
+            "p50": round(float(q[0.50]), 4), "p75": round(float(q[0.75]), 4),
+            "p90": round(float(q[0.90]), 4),
+        })
+    spray_dist = pd.DataFrame(dist_rows)
+    if len(spray_dist):
+        # Positive = the upper half of the parks is more spread out than the lower half.
+        spray_dist["skew"] = ((spray_dist["p90"] - spray_dist["p50"])
+                              - (spray_dist["p50"] - spray_dist["p10"])).round(4)
 
     # ---------- field map: gap by landing location ----------
     fm = bip[bip["spray"].notna() & bip["hc_dist"].notna()].copy()
@@ -519,6 +550,7 @@ def main():
     dump("league_spray.json", recs(lg_spray))
     dump("league_spray_coarse.json", recs(lg_spray_c))
     dump("park_spray.json", recs(pk_spray))
+    dump("spray_dist.json", recs(spray_dist))
     dump("field_map.json", recs(fmap))
     dump("carry_spray.json", recs(carry_spray))
     dump("outcome_mix.json", recs(mix))
