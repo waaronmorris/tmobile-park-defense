@@ -872,7 +872,8 @@ function renderSpray(){
   });
 
   svg.append("path").datum(lg).attr("fill","none").attr("stroke",cssVar("--ink-2"))
-    .attr("stroke-width",2).attr("opacity",.95).attr("d",line);
+    .attr("stroke-width",2).attr("opacity",.95).attr("d",line)
+    .attr("pointer-events","none");
 
   if(pk.length){
     const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
@@ -881,7 +882,7 @@ function renderSpray(){
     // park-spread band underneath it. Whiskers carry the same number and match the
     // encoding used on every other chart here.
     if(pk[0].ba_lo!=null){
-      const g=svg.append("g").attr("class","pk-err");
+      const g=svg.append("g").attr("class","pk-err").attr("pointer-events","none");
       g.selectAll("line.v").data(pk).join("line")
         .attr("x1",d=>x(d.spray_c+3.75)).attr("x2",d=>x(d.spray_c+3.75))
         .attr("y1",d=>y(d.ba_lo)).attr("y2",d=>y(d.ba_hi))
@@ -892,7 +893,8 @@ function renderSpray(){
         .attr("stroke",cssVar("--accent")).attr("stroke-width",1).attr("opacity",.55));
     }
     svg.append("path").datum(pk).attr("fill","none").attr("stroke",cssVar("--accent"))
-      .attr("stroke-width",2.6).attr("d",lineP);
+      .attr("stroke-width",2.6).attr("d",lineP)
+      .attr("pointer-events","none");
     svg.append("g").selectAll("circle").data(pk).join("circle")
       .attr("cx",d=>x(d.spray_c+3.75)).attr("cy",d=>y(d.ba)).attr("r",3.2)
       .attr("fill",cssVar("--accent"))
