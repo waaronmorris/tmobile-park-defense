@@ -849,33 +849,32 @@ function renderSpray(){
   // analysis rather than being recomputed here.
   const line=d3.line().x(d=>x(d.spray_bin+2.5)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
 
-  /* Where the thirty parks actually live, at each angle. The league mean line alone
-     cannot say whether a park is unusual -- a park under the mean may be entirely
-     ordinary. These bands are the spread ACROSS parks, so the selected park reads as
-     inside or outside the pack, and the asymmetry of the band about the mean is the
-     skew rather than a claim about it. */
-  const dist=sprayDist.filter(sameBand).sort((a,b)=>a.spray_c-b.spray_c);
-  if(dist.length){
-    const band=(lo,hi,op)=>svg.append("path").datum(dist)
-      .attr("fill",cssVar("--dist")).attr("opacity",op)
-      .attr("d",d3.area().x(d=>x(d.spray_c+3.75)).y0(d=>y(d[lo])).y1(d=>y(d[hi]))
-        .curve(d3.curveMonotoneX));
-    band("p10","p90",.13);
-    band("p25","p75",.22);
-    svg.append("path").datum(dist).attr("fill","none")
-      .attr("stroke",cssVar("--ink-3")).attr("stroke-width",1).attr("stroke-dasharray","1,3")
-      .attr("d",d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.p50)).curve(d3.curveMonotoneX));
-    svg.append("g").selectAll("rect.dhit").data(dist).join("rect")
-      .attr("x",d=>x(d.spray_c)).attr("width",d=>x(d.spray_c+7.5)-x(d.spray_c))
-      .attr("y",M.t).attr("height",H-M.b-M.t).attr("fill","transparent")
-      .on("mousemove",(e,d)=>showTip(e,"<b>"+d.spray_c+"° to "+(d.spray_c+7.5)+"°</b><br>"+
-        "across "+d.parks+" parks<br>middle half "+ba3(d.p25)+" to "+ba3(d.p75)+
-        "<br>10th–90th "+ba3(d.p10)+" to "+ba3(d.p90)+
-        "<br>median "+ba3(d.p50)))
-      .on("mouseleave",hideTip);
-  }
+  /* Every ballpark, drawn. The percentile band this replaces summarised the same
+     thirty curves, but a summary cannot show that two parks reach the same average by
+     opposite shapes -- one killing the gaps, another killing the lines. The spread, the
+     outliers and the shared skeleton are all legible at once here, and the selected park
+     is read against the actual field rather than against a quantile. */
+  const others = d3.group(pkSpray.filter(sameBand), d => d.park);
+  const pline = d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+  const og = svg.append("g").attr("class","other-parks");
+  others.forEach((series, park) => {
+    if (park === PARK || series.length < 6) return;
+    const pts = series.slice().sort((a,b)=>a.spray_c-b.spray_c);
+    og.append("path").datum(pts)
+      .attr("fill","none").attr("stroke",cssVar("--cold"))
+      .attr("stroke-width",1).attr("opacity",.30).attr("d",pline)
+      .attr("pointer-events","none");
+    // A 1px stroke is far too fine to hit. This invisible companion is the target.
+    og.append("path").datum(pts)
+      .attr("fill","none").attr("stroke","transparent").attr("stroke-width",9)
+      .attr("pointer-events","stroke").attr("d",pline).style("cursor","pointer")
+      .on("mousemove",(e)=>showTip(e,"<b>"+nameOf[park]+"</b><br>click to select"))
+      .on("mouseleave",hideTip)
+      .on("click",()=>{ hideTip(); PARK=park; parkSel.property("value",PARK); renderAll(); });
+  });
+
   svg.append("path").datum(lg).attr("fill","none").attr("stroke",cssVar("--ink-2"))
-    .attr("stroke-width",1.7).attr("opacity",.55).attr("d",line);
+    .attr("stroke-width",2).attr("opacity",.95).attr("d",line);
 
   if(pk.length){
     const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
@@ -935,20 +934,38 @@ function renderSpray(){
   d3.select("#sprayKey").html(
     '<span style="color:var(--accent)">●</span> '+nameOf[PARK]+
     ' &nbsp; <span style="color:var(--ink-2)">●</span> League mean'+
-    ' &nbsp; <span style="color:var(--dist)">▓</span> middle half of parks'+
+    ' &nbsp; <span style="color:var(--cold)">╱</span> the other 31 parks'+
     ' &nbsp; <span style="color:var(--ink-3)">--</span> xBA');
 
   const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba);
+  /* The single dashed rule is honest only if every park really is assigned the same
+     expected value. Measure it: within one contact cell the parks barely differ on xBA
+     and differ enormously on what happens. */
+  let spreadNote="";
+  {
+    const byPark=d3.rollup(pkSpray.filter(sameBand),
+      v=>({x:d3.sum(v,d=>d.xba*d.n)/d3.sum(v,d=>d.n), b:d3.sum(v,d=>d.ba*d.n)/d3.sum(v,d=>d.n)}),
+      d=>d.park);
+    const xs=[...byPark.values()].map(d=>d.x), bs=[...byPark.values()].map(d=>d.b);
+    if(xs.length>=10){
+      const xr=d3.max(xs)-d3.min(xs), br=d3.max(bs)-d3.min(bs);
+      spreadNote="Across the "+xs.length+" ballparks, xBA in this cell spans only <b>"+
+        ba3(d3.min(xs))+"–"+ba3(d3.max(xs))+"</b> while what actually happened spans <b>"+
+        ba3(d3.min(bs))+"–"+ba3(d3.max(bs))+"</b> — "+(br/xr).toFixed(0)+
+        "× the spread, on contact the model calls identical.";
+    }
+  }
   const nTot=d3.sum(lg,d=>d.n), nMin=d3.min(lg,d=>d.n);
   d3.select("#sprayNote").html(
     "In this cell xBA sits at "+ba3(xbaLevel)+" everywhere. The real batting average runs from <b>"+
     ba3(lo)+"</b> to <b>"+ba3(hi)+"</b> depending only on direction — a spread of "+
     ba3(hi-lo)+" that the model treats as identical contact."+
-    "<br><span style='opacity:.75'>"+fi(nTot)+" batted balls across "+lg.length+
-    " bins, thinnest "+fi(nMin)+". The grey band is where the middle half and the middle "+
-    "80% of the thirty parks fall in each bin, so a park inside it is ordinary however far "+
-    "it sits from the mean; its asymmetry about the mean line is the skew. Both curves use "+
-    "the same contact band and differ only in spray-bin width."+
+    (spreadNote ? "<br>"+spreadNote : "")+
+    "<br><span style='opacity:.75'>"+fi(nTot)+" batted balls league-wide across "+lg.length+
+    " bins, thinnest "+fi(nMin)+". Every other ballpark is drawn in blue — click one to "+
+    "select it. They share a skeleton because the fielders stand in the same places "+
+    "everywhere; where they part is geometry. All curves use the same contact band, and "+
+    "the park curves use wider spray bins because one park holds a thirtieth of the contact."+
     "</span>");
 }
 
