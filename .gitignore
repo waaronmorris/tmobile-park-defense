@@ -1,0 +1,16 @@
+# Raw Statcast pulls — 233 MB of parquet, and every chunk is reproducible by
+# re-running scripts/pull_statcast.py, which skips whatever is already on disk.
+data/raw/
+data/*.log
+data/smoke.parquet
+
+# The artifact build. docs/index.html is the deployed copy and is committed; this one
+# is the same page without the standalone document wrapper, and viz/data/ is committed,
+# so `build_viz.py` regenerates it from a fresh clone without touching the raw pulls.
+viz/index.html
+
+.venv/
+__pycache__/
+*.pyc
+
+.DS_Store

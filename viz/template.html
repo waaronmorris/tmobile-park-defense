@@ -1,0 +1,1149 @@
+<title>The xBA Blind Spot</title>
+<style>
+/* ---- tokens: light is the bare :root, dark redefines tokens only ---- */
+:root{
+  --ground:#F1F4F3; --surface:#FFFFFF; --surface-2:#E9EEEC;
+  --ink:#0E1F1D; --ink-2:#415653; --ink-3:#6E8481;
+  --rule:#D3DCDA; --rule-2:#BCC8C6;
+  --accent:#00706B; --accent-soft:#D3EAE6;
+  --cold:#22638F; --hot:#B4551C; --mid:#93A5A3;
+  --shadow:0 1px 2px rgba(14,31,29,.06),0 8px 24px rgba(14,31,29,.05);
+  --grid:#E3E9E8;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0A1514; --surface:#111E1D; --surface-2:#182726;
+    --ink:#E9F0EE; --ink-2:#A3B7B4; --ink-3:#7B908D;
+    --rule:#223533; --rule-2:#2F4643;
+    --accent:#3FD0C0; --accent-soft:#12302E;
+    --cold:#4E9FD6; --hot:#E08944; --mid:#6B7F7D;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+    --grid:#1B2A29;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0A1514; --surface:#111E1D; --surface-2:#182726;
+  --ink:#E9F0EE; --ink-2:#A3B7B4; --ink-3:#7B908D;
+  --rule:#223533; --rule-2:#2F4643;
+  --accent:#3FD0C0; --accent-soft:#12302E;
+  --cold:#4E9FD6; --hot:#E08944; --mid:#6B7F7D;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  --grid:#1B2A29;
+}
+
+*{box-sizing:border-box}
+:root{
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+h1,h2,h3{text-wrap:balance;margin:0;letter-spacing:-.025em;font-weight:660;line-height:1.15}
+h1{font-size:clamp(2rem,4.6vw,3.35rem);letter-spacing:-.04em}
+h2{font-size:clamp(1.4rem,2.4vw,1.9rem)}
+h3{font-size:1.02rem;letter-spacing:-.01em}
+p{margin:0}
+a{color:var(--accent)}
+
+.eyebrow{
+  font-family:var(--mono); font-size:.685rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3);
+}
+.lede{font-size:clamp(1.02rem,1.5vw,1.18rem);color:var(--ink-2);max-width:64ch}
+.note{font-size:.85rem;color:var(--ink-3);max-width:72ch}
+
+/* ---- masthead ---- */
+header.top{border-bottom:1px solid var(--rule);background:var(--surface)}
+.masthead{display:flex;flex-direction:column;gap:20px;padding:52px 0 40px}
+.rule-row{display:flex;align-items:center;gap:14px}
+.rule-row::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+/* readout strip: the four numbers that carry the argument */
+.readout{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:3px;overflow:hidden;
+}
+.stat{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:5px}
+.stat .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.stat .v{font-size:1.72rem;font-weight:660;letter-spacing:-.035em;line-height:1}
+.stat .s{font-size:.79rem;color:var(--ink-2)}
+.v.cold{color:var(--cold)} .v.hot{color:var(--hot)}
+
+/* ---- sections ---- */
+section{padding:56px 0;border-bottom:1px solid var(--rule)}
+.sec-head{display:flex;flex-direction:column;gap:12px;margin-bottom:28px;max-width:70ch}
+
+.panel{
+  background:var(--surface);border:1px solid var(--rule);border-radius:4px;
+  box-shadow:var(--shadow);padding:20px;
+}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.split{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:20px}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+
+.chart-scroll{overflow-x:auto}
+svg{display:block;max-width:100%;height:auto}
+text{font-family:var(--mono);fill:var(--ink-2)}
+.axis line,.axis path{stroke:var(--rule-2)}
+.axis text{font-size:10px;fill:var(--ink-3)}
+.gridline{stroke:var(--grid)}
+
+/* ---- controls ---- */
+.controls{
+  position:sticky;top:0;z-index:20;background:var(--surface);
+  border-bottom:1px solid var(--rule);padding:11px 0;
+}
+.ctl-row{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+label.ctl{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.7rem;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+select{
+  font-family:var(--mono);font-size:.82rem;letter-spacing:0;text-transform:none;
+  background:var(--surface-2);color:var(--ink);border:1px solid var(--rule-2);
+  border-radius:3px;padding:6px 9px;
+}
+select:focus-visible,button:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.legend{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.68rem;color:var(--ink-3)}
+.ramp{height:9px;width:132px;border-radius:2px;border:1px solid var(--rule-2)}
+
+.tip{
+  position:fixed;pointer-events:none;z-index:60;background:var(--surface);
+  border:1px solid var(--rule-2);border-radius:3px;padding:8px 10px;
+  font-family:var(--mono);font-size:.71rem;line-height:1.5;color:var(--ink);
+  box-shadow:var(--shadow);opacity:0;transition:opacity .1s;max-width:250px;
+}
+.tip b{color:var(--accent);font-weight:600}
+
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:.76rem}
+th,td{text-align:right;padding:5px 9px;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink-3);font-weight:500;letter-spacing:.07em;text-transform:uppercase;font-size:.64rem}
+tr.me td{background:var(--accent-soft);font-weight:600}
+
+.cell{cursor:pointer}
+.sel-outline{fill:none;stroke:var(--ink);stroke-width:2;pointer-events:none}
+.callout{
+  border-left:2px solid var(--accent);padding:2px 0 2px 16px;
+  color:var(--ink-2);font-size:.95rem;max-width:66ch;
+}
+footer{padding:44px 0 64px;color:var(--ink-3);font-size:.83rem}
+footer p{margin-bottom:9px;max-width:76ch}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top"><div class="wrap masthead">
+  <div class="rule-row"><span class="eyebrow">Statcast 2021&ndash;2026 &middot; 699,693 balls in play</span></div>
+  <h1>The xBA blind spot</h1>
+  <p class="lede">
+    Expected batting average is a function of exit velocity and launch angle, both fixed at
+    contact. It has no term for where the ball went or how far it carried. Pick a ballpark
+    and a contact cell to see what that leaves out.
+  </p>
+  <div class="readout" id="readout"></div>
+</div></header>
+
+<div class="controls"><div class="wrap ctl-row">
+  <label class="ctl">Ballpark
+    <select id="parkSel"></select>
+  </label>
+  <label class="ctl">Contact
+    <select id="bandSel"></select>
+  </label>
+  <span class="legend" id="legendGap"></span>
+</div></div>
+
+<main class="wrap">
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The blind spot</span>
+    <h2>One xBA value, the entire width of the field</h2>
+    <p class="note">
+      Every ball in a cell left the bat at nearly the same speed and angle, so xBA assigns
+      them all nearly the same value &mdash; the flat dashed line. The solid line is what
+      happened, against spray angle.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3>xBA by exit velocity and launch angle</h3>
+        <span class="legend"><span>.00</span><span class="ramp" id="rampXba"></span><span>1.00</span></span></div>
+      <div class="chart-scroll"><svg id="gridChart"></svg></div>
+      <p class="note" style="margin-top:10px">League-wide. Click any cell to drive the chart at right.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Actual outcome by spray angle</h3><span class="legend" id="sprayKey"></span></div>
+      <div class="chart-scroll"><svg id="sprayChart"></svg></div>
+      <p class="note" id="sprayNote" style="margin-top:10px"></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The gradient</span>
+    <h2>Where the outs live</h2>
+    <p class="note">
+      Every batted ball placed where it came down, binned by direction and distance,
+      coloured by how far the outcome fell short of or beat xBA.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3 id="fieldTitle">Field</h3>
+        <span class="legend"><span>&minus;.30</span><span class="ramp" id="rampField"></span><span>+.30</span></span></div>
+      <div class="chart-scroll"><svg id="fieldChart"></svg></div>
+      <p class="note" style="margin-top:10px">
+        Colour is BA&nbsp;&minus;&nbsp;xBA within each bin, on a wider scale than the park
+        totals above &mdash; single locations swing much harder than a whole ballpark does.
+      </p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>League average, same bins</h3></div>
+      <div class="chart-scroll"><svg id="fieldChartLg"></svg></div>
+      <p class="note" style="margin-top:10px">
+        Side by side, the park&rsquo;s signature is the difference between these two fans,
+        not the shape of either one.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The physics</span>
+    <h2>Carry: the part defense cannot explain</h2>
+    <p class="note">
+      Each ball hit in the air against the league&rsquo;s median distance for its exact exit
+      velocity and launch angle. Positioning cannot change how far a ball flies, so this
+      isolates the park from its defence. Coors Field on top is the control.
+    </p>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>Carry versus league expectation, feet</h3><span class="legend" id="nCarry"></span></div>
+    <div class="chart-scroll"><svg id="carryChart"></svg></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">What actually goes missing</span>
+    <h2>It does not eat home runs</h2>
+    <p class="note">
+      Each hit type as a share of balls in play, against the league&rsquo;s share of the
+      same. <b>Read the hit counts before the bars</b> &mdash; triples are half a percent of
+      all contact, so a huge percentage there is a handful of hits, while a small percentage
+      on singles is many.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3 id="mixTitle">Hit types vs league</h3></div>
+      <div class="chart-scroll"><svg id="mixChart"></svg></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Shortfall by batted-ball type</h3></div>
+      <div class="chart-scroll"><svg id="btypeChart"></svg></div>
+      <p class="note" style="margin-top:10px">
+        BA &minus; xBA relative to league, split by how the ball was struck. A carry effect
+        should bite on balls hit in the air and leave ground balls alone.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The strikeouts</span>
+    <h2>Contact never made</h2>
+    <p class="note">
+      Personnel held fixed: each park scored once by following the home club&rsquo;s hitters
+      in and out of the building, once by following its pitchers, then averaged. 1.00 is
+      neutral; 1.10 is ten percent more strikeouts than the same people manage elsewhere.
+    </p>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>Strikeout park factor, personnel held fixed</h3><span class="legend" id="nK"></span></div>
+    <div class="chart-scroll"><svg id="kChart"></svg></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The ledger</span>
+    <h2>Every park, measured against its own contact quality</h2>
+    <p class="note">
+      Measured against the league rather than zero &mdash; xBA runs slightly under reality on
+      this population, so league average is a small positive number. The adjusted column
+      divides out the hitters, charging each batted ball against that batter&rsquo;s own
+      record in every other park.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3>BA &minus; xBA relative to league</h3><span class="legend" id="nRank"></span></div>
+      <div class="chart-scroll"><svg id="rankChart"></svg></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>Park table</h3></div>
+      <div class="chart-scroll" style="max-height:520px;overflow-y:auto"><table id="parkTable"></table></div>
+    </div>
+  </div>
+</section>
+
+<section style="border-bottom:none">
+  <div class="sec-head">
+    <span class="eyebrow">Season by season</span>
+    <h2 id="seasonTitle">Is it stable?</h2>
+    <p class="note">A park effect that flips sign every year is noise. One that holds is a building.</p>
+  </div>
+  <div class="panel"><div class="chart-scroll"><svg id="seasonChart"></svg></div></div>
+</section>
+
+</main>
+
+
+<section class="wrap" style="border-bottom:none">
+  <div class="sec-head">
+    <span class="eyebrow">Precision</span>
+    <h2>What the sample will and will not support</h2>
+    <p class="note">
+      Every chart above is an estimate, and they are not equally solid. Batting average is
+      a coin flip repeated: its uncertainty falls as one over the square root of the count,
+      so a measurement over 22,000 balls is roughly a fifth as wide as the same measurement
+      over one season. Below, each headline number with the sample behind it and the width
+      of its 95% interval.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3 id="precTitle">Every estimate, with its interval</h3></div>
+      <div class="chart-scroll"><table id="precTable"></table></div>
+      <p class="note" style="margin-top:10px">
+        The last column is the estimate divided by its own margin of error. Below 1.0 the
+        interval spans zero and the measurement cannot tell you the direction.
+      </p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>What it takes to see an effect</h3></div>
+      <div class="chart-scroll"><svg id="powerChart"></svg></div>
+      <p class="note" id="powerNote" style="margin-top:10px"></p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p><b>Source.</b> Pitch-level Statcast from Baseball Savant, pulled with
+  <span style="font-family:var(--mono)">plyball</span>, regular season 2021&ndash;2026.
+  xBA is Savant&rsquo;s own <span style="font-family:var(--mono)">estimated_ba_using_speedangle</span>.</p>
+  <p><b>The statistic.</b> BA&nbsp;&minus;&nbsp;xBA is exactly
+  <span style="font-family:var(--mono)">(hits &minus; &sum;xBA) / n</span>. Both terms run over
+  one identical set of rows; Savant assigns no xBA to sacrifice flies, so they drop out exactly
+  as they drop out of at-bats, while errors, double plays and fielder&rsquo;s choices stay in.
+  Spray angle comes from the Statcast hit coordinate, negative toward left field. Carry residual
+  is measured inside 1&nbsp;mph by 1&deg; cells and re-centred on the league mean.</p>
+  <p><b>Caveats.</b> BA&nbsp;&minus;&nbsp;xBA blends the ballpark with the defence that plays in
+  it; carry residual is the cleaner park-only reading. Three clubs did not play the whole span in
+  their usual building &mdash; Sacramento and Steinbrenner Field are listed separately &mdash;
+  and Camden Yards moved its left-field wall inside this window.</p>
+  <!-- Absolute: this page is published standalone as well as inside morris-labs,
+       and a root-relative href resolves against the wrong host in the standalone copy. -->
+  <p style="margin-top:14px">
+  <a href="https://morris-labs.dev/blog/the-xba-blind-spot">Read the write-up &rarr;</a>
+  &nbsp;&middot;&nbsp; <a href="https://morris-labs.dev/lab/xba-blind-spot">About this tool</a></p>
+</footer>
+
+<div class="tip" id="tip"></div>
+
+<script>/*__D3__*/</script>
+<script>
+const RAW = "__DATA__";
+
+/* columnar -> rows */
+function unpack(p){
+  if(!p || !p.n) return [];
+  const keys = Object.keys(p.cols), out = new Array(p.n);
+  for(let i=0;i<p.n;i++){
+    const o={};
+    for(const k of keys){
+      const c=p.cols[k];
+      o[k] = Array.isArray(c) ? c[i] : (c.idx[i]<0 ? null : c.dict[c.idx[i]]);
+    }
+    out[i]=o;
+  }
+  return out;
+}
+const D = {};
+for(const k in RAW){ if(!k.startsWith("_")) D[k] = unpack(RAW[k]); }
+const META = RAW._meta || {};
+const PRECISION = RAW._precision || {ledger:[],curve:[]};
+const Z95 = PRECISION.z || 1.96;
+/* xBA runs a few points below reality on this population, so league-average BA − xBA is
+   a small positive number rather than zero. Every comparison below is drawn against it. */
+const LG_GAP = META.league_gap || 0;
+
+const summary   = D.summary || [];
+const lgGrid    = D.league_grid || [];
+const pkGrid    = D.park_grid || [];
+const lgSpray   = D.league_spray || [];
+const lgSprayC  = D.league_spray_coarse || [];
+const pkSpray   = D.park_spray || [];
+const fieldMap  = D.field_map || [];
+const parkSeason= D.park_season || [];
+const outcomeMix= D.outcome_mix || [];
+const btypeGap  = D.btype_gap || [];
+
+const nameOf = {}; summary.forEach(d=>nameOf[d.park]=d.name);
+const byPark = {}; summary.forEach(d=>byPark[d.park]=d);
+
+/* ---------- palette ---------- */
+const XBA_RAMP = ["#12232B","#1B4E5B","#2C8C86","#69C2A0","#CFE08D","#F2C14E"];
+const xbaColor = d3.scaleSequential(d3.interpolateRgbBasis(XBA_RAMP)).domain([0,1]);
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function gapRamp(){
+  return d3.interpolateRgbBasis(["#164C74", cssVar("--cold"), cssVar("--mid"), cssVar("--hot"), "#8C3D12"]);
+}
+let gapColor = d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
+
+const tip = d3.select("#tip");
+function showTip(ev, html){
+  tip.html(html).style("opacity",1)
+     .style("left", Math.min(ev.clientX+14, innerWidth-262)+"px")
+     .style("top", Math.min(ev.clientY+14, innerHeight-110)+"px");
+}
+function hideTip(){ tip.style("opacity",0); }
+const f3 = d3.format(".3f"), fp = d3.format("+.3f"), f1 = d3.format("+.1f"), fi = d3.format(",");
+
+/* ---------- state ---------- */
+let PARK = "SEA";
+let BAND = null;              // {ev_band, la_band} against the fine league grid
+const evOrder = ["<80","80-90","90-95","95-100","100-105","105+"];
+const laOrder = ["<0","0-10","10-20","20-25","25-30","30-40","40+"];
+
+/* map a fine band onto the coarse per-park bands */
+function coarseEv(b){ return b==="<80"?"<90" : b==="80-90"?"<90" : (b==="90-95"||b==="95-100")?"90-100":"100+"; }
+function coarseLa(b){ return b==="<0"?"<10" : b==="0-10"?"<10" : (b==="10-20"||b==="20-25")?"10-25" : b==="30-40"?"25-40" : b==="25-30"?"25-40":"40+"; }
+
+/* ---------- controls ---------- */
+const parkSel = d3.select("#parkSel");
+parkSel.selectAll("option")
+  .data(summary.slice().sort((a,b)=>d3.ascending(a.name,b.name)))
+  .join("option").attr("value",d=>d.park).text(d=>d.name);
+parkSel.property("value", PARK).on("change", function(){ PARK=this.value; renderAll(); });
+
+const bandPairs = [];
+evOrder.forEach(e=>laOrder.forEach(l=>{
+  if(lgSpray.some(d=>d.ev_band===e && d.la_band===l)) bandPairs.push({ev_band:e,la_band:l});
+}));
+BAND = bandPairs.find(b=>b.ev_band==="95-100" && b.la_band==="20-25") || bandPairs[0];
+const bandSel = d3.select("#bandSel");
+bandSel.selectAll("option").data(bandPairs).join("option")
+  .attr("value",d=>d.ev_band+"|"+d.la_band)
+  .text(d=>d.ev_band+" mph, "+d.la_band+"°");
+bandSel.property("value", BAND.ev_band+"|"+BAND.la_band).on("change", function(){
+  const [e,l]=this.value.split("|"); BAND={ev_band:e,la_band:l}; renderGrid(); renderSpray(); renderField();
+});
+
+/* ramps in the legends */
+function paintRamp(sel, interp, n){
+  const stops=[]; for(let i=0;i<=n;i++) stops.push(interp(i/n));
+  d3.select(sel).style("background","linear-gradient(90deg,"+stops.join(",")+")");
+}
+
+/* ---------- readout ---------- */
+function renderReadout(){
+  const s = byPark[PARK]; if(!s) return;
+  const sorted = summary.slice().sort((a,b)=>a.gap-b.gap);
+  const rank = sorted.findIndex(d=>d.park===PARK)+1;
+  const carrySorted = summary.filter(d=>d.carry_ft!=null).slice().sort((a,b)=>a.carry_ft-b.carry_ft);
+  const cRank = carrySorted.findIndex(d=>d.park===PARK)+1;
+  const items = [
+    {k:"Batting average", v:f3(s.ba).slice(1),
+     s:(s.hits!=null?fi(s.hits)+" hits on "+fi(s.bip)+" balls in play":"on "+fi(s.bip)+" balls in play")},
+    {k:"Expected (xBA)",  v:f3(s.xba).slice(1),
+     s:(s.xba_sum!=null
+        ? fi(Math.round(s.xba_sum))+" expected — "+
+          (s.hits_vs_xba<0 ? "short by "+fi(Math.round(-s.hits_vs_xba))
+                           : "over by "+fi(Math.round(s.hits_vs_xba)))
+        : "from exit velocity and angle alone")},
+    {k:"BA − xBA vs league", v:fp(s.gap_rel!=null?s.gap_rel:s.gap-LG_GAP),
+     s:"rank "+rank+" of "+sorted.length+
+       (s.gap_z!=null?" · "+d3.format(".1f")(Math.abs(s.gap_z))+"σ":"")+
+       " · hitter-adjusted "+fp(s.adj_gap),
+     cls: (s.gap-LG_GAP)<0?"cold":"hot"},
+    {k:"Hits vs expectation", v:(s.hits_vs_lg==null?"—":d3.format("+,.0f")(s.hits_vs_lg)),
+     s:(s.hits_vs_lg==null?"":"against the league · "+
+        d3.format("+,.0f")(s.hits_vs_lg_per_season)+" per season"+
+        (s.hits_vs_xba!=null?" · "+d3.format("+,.0f")(s.hits_vs_xba)+" against xBA raw":"")),
+     cls:(s.hits_vs_lg==null?"":(s.hits_vs_lg<0?"cold":"hot"))},
+    {k:"Carry vs league", v:(s.carry_ft==null?"—":f1(s.carry_ft)+" ft"),
+     s:(s.carry_ft==null?"":"rank "+cRank+" of "+carrySorted.length+" · air balls only"),
+     cls:(s.carry_ft==null?"":(s.carry_ft<0?"cold":"hot"))}
+  ];
+  if(s.k_pf!=null){
+    const kSorted=summary.filter(d=>d.k_pf!=null).slice().sort((a,b)=>b.k_pf-a.k_pf);
+    items.push({k:"Strikeout factor", v:d3.format(".3f")(s.k_pf),
+      s:"rank "+(kSorted.findIndex(d=>d.park===PARK)+1)+" of "+kSorted.length+
+        " · raw "+d3.format(".1%")(s.k_pct), cls:s.k_pf>1?"cold":"hot"});
+  }
+  const sel = d3.select("#readout").selectAll(".stat").data(items).join("div").attr("class","stat");
+  sel.html(d=>'<span class="k">'+d.k+'</span><span class="v '+(d.cls||"")+'">'+d.v+
+    '</span><span class="s">'+d.s+'</span>');
+}
+
+/* ---------- EV x LA grid ---------- */
+function renderGrid(){
+  const M={t:12,r:14,b:40,l:46}, W=430, H=372;
+  const evs=[...new Set(lgGrid.map(d=>d.ev_bin))].sort(d3.ascending);
+  const las=[...new Set(lgGrid.map(d=>d.la_bin))].sort(d3.ascending);
+  const x=d3.scaleBand().domain(evs).range([M.l,W-M.r]).paddingInner(.04);
+  const y=d3.scaleBand().domain(las.slice().reverse()).range([M.t,H-M.b]).paddingInner(.04);
+
+  const svg=d3.select("#gridChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+
+  svg.append("g").selectAll("rect")
+    .data(lgGrid.filter(d=>d.n>=25)).join("rect")
+      .attr("class","cell").attr("tabindex",0)
+      .attr("x",d=>x(d.ev_bin)).attr("y",d=>y(d.la_bin))
+      .attr("width",x.bandwidth()).attr("height",y.bandwidth())
+      .attr("fill",d=>xbaColor(d.xba))
+      .on("mousemove",(e,d)=>showTip(e,
+        "<b>"+d.ev_bin+"–"+(d.ev_bin+2.5)+" mph, "+d.la_bin+"–"+(d.la_bin+2.5)+"°</b><br>"+
+        "xBA "+f3(d.xba)+" &middot; BA "+f3(d.ba)+"<br>"+fi(d.n)+" batted balls"))
+      .on("mouseleave",hideTip)
+      .on("click",(e,d)=>selectFromGrid(d))
+      .on("keydown",(e,d)=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();selectFromGrid(d);} });
+
+  /* outline the cells belonging to the active band */
+  const inBand = d=>evBandOf(d.ev_bin)===BAND.ev_band && laBandOf(d.la_bin)===BAND.la_band;
+  const sel = lgGrid.filter(d=>d.n>=25 && inBand(d));
+  if(sel.length){
+    const x0=d3.min(sel,d=>x(d.ev_bin)), x1=d3.max(sel,d=>x(d.ev_bin))+x.bandwidth();
+    const y0=d3.min(sel,d=>y(d.la_bin)), y1=d3.max(sel,d=>y(d.la_bin))+y.bandwidth();
+    svg.append("rect").attr("class","sel-outline")
+      .attr("x",x0-1.5).attr("y",y0-1.5).attr("width",x1-x0+3).attr("height",y1-y0+3).attr("rx",1);
+  }
+
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).tickValues(evs.filter(v=>v%10===0)).tickFormat(d=>d));
+  svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
+    .call(d3.axisLeft(y).tickValues(las.filter(v=>v%10===0)).tickFormat(d=>d+"°"));
+  svg.append("text").attr("x",(W+M.l)/2).attr("y",H-6).attr("text-anchor","middle")
+    .attr("font-size",10).attr("fill",cssVar("--ink-3")).text("EXIT VELOCITY (MPH)");
+  svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",13)
+    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text("LAUNCH ANGLE");
+}
+function evBandOf(v){ return v<80?"<80": v<90?"80-90": v<95?"90-95": v<100?"95-100": v<105?"100-105":"105+"; }
+function laBandOf(v){ return v<0?"<0": v<10?"0-10": v<20?"10-20": v<25?"20-25": v<30?"25-30": v<40?"30-40":"40+"; }
+function selectFromGrid(d){
+  BAND={ev_band:evBandOf(d.ev_bin), la_band:laBandOf(d.la_bin)};
+  bandSel.property("value",BAND.ev_band+"|"+BAND.la_band);
+  renderGrid(); renderSpray(); renderField();
+}
+
+/* ---------- spray curve: the centerpiece ---------- */
+function renderSpray(){
+  const M={t:16,r:16,b:44,l:44}, W=520, H=372;
+  const svg=d3.select("#sprayChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+
+  const lg = lgSpray.filter(d=>d.ev_band===BAND.ev_band && d.la_band===BAND.la_band)
+                    .sort((a,b)=>a.spray_bin-b.spray_bin);
+  const pk = pkSpray.filter(d=>d.park===PARK && d.ev_c===coarseEv(BAND.ev_band) && d.la_c===coarseLa(BAND.la_band))
+                    .sort((a,b)=>a.spray_c-b.spray_c);
+
+  if(!lg.length){ svg.append("text").attr("x",W/2).attr("y",H/2).attr("text-anchor","middle")
+    .attr("font-size",11).text("not enough batted balls in this cell");
+    d3.select("#sprayNote").text(""); return; }
+
+  const x=d3.scaleLinear().domain([-47,47]).range([M.l,W-M.r]);
+  const y=d3.scaleLinear().domain([0,1]).range([H-M.b,M.t]);
+
+  y.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(t)).attr("y2",y(t)));
+
+  /* field-direction guides */
+  [[-45,"LF LINE"],[0,"CENTER"],[45,"RF LINE"]].forEach(([a,lab])=>{
+    svg.append("line").attr("class","gridline").attr("x1",x(a)).attr("x2",x(a))
+      .attr("y1",M.t).attr("y2",H-M.b).attr("stroke-dasharray","2,3");
+    svg.append("text").attr("x",x(a)).attr("y",H-M.b+26).attr("text-anchor","middle")
+      .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em").text(lab);
+  });
+
+  const xbaLevel=d3.mean(lg,d=>d.xba);
+  svg.append("line").attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(xbaLevel)).attr("y2",y(xbaLevel))
+    .attr("stroke",cssVar("--ink-3")).attr("stroke-width",1.5).attr("stroke-dasharray","6,4");
+  svg.append("text").attr("x",W-M.r-4).attr("y",y(xbaLevel)-6).attr("text-anchor","end")
+    .attr("font-size",9.5).attr("fill",cssVar("--ink-3")).text("xBA "+f3(xbaLevel));
+
+  // Wilson bands. Several of these bins sit near .02 or .99, where a symmetric
+  // interval would run off the end of the scale, so the bounds come from the
+  // analysis rather than being recomputed here.
+  const line=d3.line().x(d=>x(d.spray_bin+2.5)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+  if(lg[0]&&lg[0].ba_lo!=null){
+    svg.append("path").datum(lg).attr("fill",cssVar("--ink-2")).attr("opacity",.16)
+      .attr("d",d3.area().x(d=>x(d.spray_bin+2.5)).y0(d=>y(d.ba_lo)).y1(d=>y(d.ba_hi))
+        .curve(d3.curveMonotoneX));
+  }
+  svg.append("path").datum(lg).attr("fill","none").attr("stroke",cssVar("--ink-2"))
+    .attr("stroke-width",1.7).attr("opacity",.55).attr("d",line);
+
+  if(pk.length){
+    const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+    if(pk[0].ba_lo!=null){
+      svg.append("path").datum(pk).attr("fill",cssVar("--accent")).attr("opacity",.16)
+        .attr("d",d3.area().x(d=>x(d.spray_c+3.75)).y0(d=>y(d.ba_lo)).y1(d=>y(d.ba_hi))
+          .curve(d3.curveMonotoneX));
+    }
+    svg.append("path").datum(pk).attr("fill","none").attr("stroke",cssVar("--accent"))
+      .attr("stroke-width",2.6).attr("d",lineP);
+    svg.append("g").selectAll("circle").data(pk).join("circle")
+      .attr("cx",d=>x(d.spray_c+3.75)).attr("cy",d=>y(d.ba)).attr("r",3.2)
+      .attr("fill",cssVar("--accent"))
+      .on("mousemove",(e,d)=>showTip(e,"<b>"+nameOf[PARK]+"</b><br>spray "+d.spray_c+"° to "+(d.spray_c+7.5)+
+        "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+        "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
+      .on("mouseleave",hideTip);
+  }
+  svg.append("g").selectAll("circle.lg").data(lg).join("circle")
+    .attr("cx",d=>x(d.spray_bin+2.5)).attr("cy",d=>y(d.ba)).attr("r",2.1)
+    .attr("fill",cssVar("--ink-2")).attr("opacity",.6)
+    .on("mousemove",(e,d)=>showTip(e,"<b>League</b><br>spray "+d.spray_bin+"° to "+(d.spray_bin+5)+
+      "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+      "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
+    .on("mouseleave",hideTip);
+
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(7).tickFormat(d=>d+"°"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>f3(d).slice(1)));
+  svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",12)
+    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text("BATTING AVERAGE");
+
+  d3.select("#sprayKey").html(
+    '<span style="color:var(--accent)">●</span> '+nameOf[PARK]+
+    ' &nbsp; <span style="color:var(--ink-2)">●</span> League'+
+    ' &nbsp; <span style="color:var(--ink-3)">--</span> xBA');
+
+  const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba), ba3=v=>f3(v).slice(1);
+  const nTot=d3.sum(lg,d=>d.n), nMin=d3.min(lg,d=>d.n);
+  d3.select("#sprayNote").html(
+    "In this cell xBA sits at "+ba3(xbaLevel)+" everywhere. The real batting average runs from <b>"+
+    ba3(lo)+"</b> to <b>"+ba3(hi)+"</b> depending only on direction — a spread of "+
+    ba3(hi-lo)+" that the model treats as identical contact."+
+    "<br><span style='opacity:.75'>"+fi(nTot)+" batted balls across "+lg.length+
+    " bins, thinnest "+fi(nMin)+". Shaded bands are 95% Wilson intervals"+
+    (pk.length?"; the park curve is coarser because one park holds a thirtieth of the contact.":".")+
+    "</span>");
+}
+
+/* ---------- field fan ---------- */
+/* Location cells swing far harder than park totals do -- a 380-foot cell is a home run
+   down the line and an out to center -- so the fan needs its own, wider colour domain. */
+function fieldColor(){ return d3.scaleDiverging(gapRamp()).domain([-0.30,0,0.30]); }
+
+function drawField(svgSel, rows, title){
+  const W=430, H=400, cx=W/2, cy=H-26, maxR=430;
+  const fc=fieldColor();
+  const svg=d3.select(svgSel).attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  // The fan is widest at the foul lines, so the radius has to satisfy the horizontal
+  // limit as well as the vertical one or the corners render outside the viewBox.
+  // Bins run to 48 degrees and each arc spans a further 4, so 52 is the real half-width.
+  const rPix=Math.min((W/2-5)/Math.sin(53*Math.PI/180), cy-16);
+  const r=d3.scaleLinear().domain([0,maxR]).range([0,rPix]);
+
+  const arc=d3.arc()
+    .innerRadius(d=>r(d.db)).outerRadius(d=>r(Math.min(d.db+20,maxR)))
+    .startAngle(d=>d.sb*Math.PI/180).endAngle(d=>(d.sb+4)*Math.PI/180);
+
+  svg.append("g").attr("transform",`translate(${cx},${cy})`).selectAll("path")
+    .data(rows.filter(d=>d.db<maxR && Math.abs(d.sb)<=48)).join("path")
+      .attr("d",arc).attr("fill",d=>fc(d.ba-d.xba)).attr("stroke","none")
+      // These are the thinnest bins anywhere here — a median of about 50 balls, so a
+      // 95% interval near ±.085. Cells whose interval spans zero are faded rather than
+      // dropped: absence of evidence still tells you where the ball went.
+      .attr("opacity",d=>{
+        if(d.gap_sem==null) return 1;
+        return Math.abs(d.ba-d.xba) > Z95*d.gap_sem ? 1 : 0.3;
+      })
+      .on("mousemove",(e,d)=>showTip(e,"<b>"+Math.round(d.db)+"–"+Math.round(d.db+20)+" ft, "+
+        d.sb+"°</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+"<br>diff "+fp(d.ba-d.xba)+
+        (d.gap_sem!=null?" ± "+f3(Z95*d.gap_sem).slice(1):"")+
+        "<br>"+fi(d.n)+" balls"+
+        (d.gap_sem!=null && Math.abs(d.ba-d.xba)<=Z95*d.gap_sem?"<br><i>interval spans zero</i>":"")))
+      .on("mouseleave",hideTip);
+
+  /* distance rings + foul lines */
+  const g=svg.append("g").attr("transform",`translate(${cx},${cy})`);
+  [100,200,300,400].forEach(d=>{
+    g.append("path").attr("d",d3.arc()({innerRadius:r(d),outerRadius:r(d),
+      startAngle:-46*Math.PI/180,endAngle:46*Math.PI/180}))
+      .attr("fill","none").attr("stroke",cssVar("--rule-2")).attr("opacity",.65);
+    g.append("text").attr("x",0).attr("y",-r(d)+3).attr("text-anchor","middle")
+      .attr("font-size",8).attr("fill",cssVar("--ink-3")).text(d+"'");
+  });
+  [-45,45].forEach(a=>{
+    const rad=a*Math.PI/180;
+    g.append("line").attr("x1",0).attr("y1",0)
+      .attr("x2",Math.sin(rad)*r(maxR)).attr("y2",-Math.cos(rad)*r(maxR))
+      .attr("stroke",cssVar("--rule-2")).attr("stroke-width",1);
+  });
+  svg.append("text").attr("x",cx).attr("y",H-8).attr("text-anchor","middle")
+    .attr("font-size",9).attr("fill",cssVar("--ink-3")).text(title);
+}
+function renderField(){
+  d3.select("#fieldTitle").text(nameOf[PARK]||PARK);
+  drawField("#fieldChart", fieldMap.filter(d=>d.park===PARK), "HOME PLATE · LEFT FIELD IS NEGATIVE");
+  const lgField = d3.rollups(fieldMap, v=>({
+      n:d3.sum(v,d=>d.n),
+      ba:d3.sum(v,d=>d.ba*d.n)/d3.sum(v,d=>d.n),
+      xba:d3.sum(v,d=>d.xba*d.n)/d3.sum(v,d=>d.n)
+    }), d=>d.sb+"|"+d.db)
+    .map(([k,v])=>({sb:+k.split("|")[0], db:+k.split("|")[1], ...v}));
+  drawField("#fieldChartLg", lgField, "ALL 30 PARKS COMBINED");
+}
+
+/* ---------- carry ranking ---------- */
+function renderCarry(){
+  const rows=summary.filter(d=>d.carry_ft!=null).sort((a,b)=>b.carry_ft-a.carry_ft);
+  const M={t:10,r:52,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#carryChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  const ext=d3.max(rows,d=>Math.abs(d.carry_ft));
+  const x=d3.scaleLinear().domain([-ext*1.1,ext*1.1]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.park)).range([M.t,H-M.b]).padding(.22);
+
+  x.ticks(9).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",H-M.b));
+
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(0),x(d.carry_ft))).attr("y",d=>y(d.park))
+    .attr("width",d=>Math.abs(x(d.carry_ft)-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>d3.scaleDiverging(gapRamp()).domain([-12,0,12])(d.carry_ft))
+    .attr("opacity",d=>d.park===PARK?1:.82)
+    .attr("stroke",d=>d.park===PARK?cssVar("--ink"):"none").attr("stroke-width",1.5)
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>"+f1(d.carry_ft)+
+      (d.carry_moe!=null?" ± "+d3.format(".2f")(d.carry_moe):"")+
+      " ft vs league<br>"+fi(d.carry_n||d.n)+" balls hit in the air"))
+    .on("mouseleave",hideTip);
+
+  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.carry_moe!=null)).join("line")
+    .attr("x1",d=>x(d.carry_ft-d.carry_moe)).attr("x2",d=>x(d.carry_ft+d.carry_moe))
+    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.7);
+
+  svg.append("g").selectAll("text").data(rows).join("text")
+    .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
+    .attr("font-size",9.5).attr("font-weight",d=>d.park===PARK?700:400)
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+  svg.append("g").selectAll("text.v").data(rows).join("text")
+    .attr("x",d=>d.carry_ft>=0?x(d.carry_ft)+5:x(d.carry_ft)-5)
+    .attr("y",d=>y(d.park)+y.bandwidth()/2+3.5)
+    .attr("text-anchor",d=>d.carry_ft>=0?"start":"end")
+    .attr("font-size",9).attr("fill",cssVar("--ink-3")).text(d=>f1(d.carry_ft));
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(9).tickFormat(d=>d+"'"));
+}
+
+/* ---------- outcome mix + batted-ball type ---------- */
+const EV_LABEL={single:"Singles",double:"Doubles",triple:"Triples",home_run:"Home runs"};
+const EV_ORDER=["single","double","triple","home_run"];
+function renderMix(){
+  const rows=EV_ORDER.map(e=>outcomeMix.find(d=>d.park===PARK&&d.event===e)).filter(Boolean);
+  d3.select("#mixTitle").text((nameOf[PARK]||PARK)+" vs league");
+  const M={t:14,r:150,b:36,l:92}, W=540, rowH=46, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#mixChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  if(!rows.length) return;
+  const pct=d=>(d.ratio-1)*100;
+  const hits=d=>(d.rate-d.lg_rate)*d.n;   // the same gap counted in hits
+  const ext=Math.max(12,d3.max(rows,d=>Math.abs(pct(d)))*1.2);
+  const x=d3.scaleLinear().domain([-ext,ext]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.event)).range([M.t,H-M.b]).padding(.42);
+  const c=d3.scaleDiverging(gapRamp()).domain([-ext,0,ext]);
+
+  x.ticks(7).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",H-M.b));
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(0),x(pct(d)))).attr("y",d=>y(d.event))
+    .attr("width",d=>Math.abs(x(pct(d))-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>c(pct(d)))
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+EV_LABEL[d.event]+"</b><br>"+
+      d3.format(".2%")(d.rate)+" of balls in play<br>league "+d3.format(".2%")(d.lg_rate)+
+      "<br>"+d3.format("+.1f")(pct(d))+"% vs league"+
+      (d.pct_lo!=null?" ["+d3.format("+.0f")(d.pct_lo)+", "+d3.format("+.0f")(d.pct_hi)+"]":"")+
+      "<br>"+d3.format("+,.0f")(hits(d))+" hits"+
+      (d.k!=null?"<br>on "+fi(d.k)+" at this park":"")))
+    .on("mouseleave",hideTip);
+
+  // Ratio intervals are asymmetric, so these are drawn from the bounds rather than
+  // as a symmetric bar. Triples are the row that needs it.
+  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.pct_lo!=null)).join("line")
+    .attr("x1",d=>x(Math.max(d.pct_lo,-ext))).attr("x2",d=>x(Math.min(d.pct_hi,ext)))
+    .attr("y1",d=>y(d.event)+y.bandwidth()/2).attr("y2",d=>y(d.event)+y.bandwidth()/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2).attr("opacity",.8);
+  svg.append("g").selectAll("text.l").data(rows).join("text")
+    .attr("x",M.l-9).attr("y",d=>y(d.event)+y.bandwidth()/2+4).attr("text-anchor","end")
+    .attr("font-size",10.5).attr("fill",cssVar("--ink-2")).text(d=>EV_LABEL[d.event]);
+
+  // Values live in a fixed right-hand column rather than at the end of each bar.
+  // Any park can be selected, so a bar can run the full width and collide with the
+  // category name -- which is exactly what the longest bar used to do.
+  svg.append("g").selectAll("text.v").data(rows).join("text")
+    .attr("x",W-M.r+12).attr("y",d=>y(d.event)+y.bandwidth()/2+4).attr("text-anchor","start")
+    .attr("font-size",10.5).attr("font-weight",600).attr("fill",cssVar("--ink"))
+    .text(d=>d3.format("+.0f")(pct(d))+"%");
+  // The percentage alone misleads: the biggest bar here is usually triples, which are
+  // rare enough that a huge percentage is a small number of hits. Show both.
+  svg.append("g").selectAll("text.h").data(rows).join("text")
+    .attr("x",W-6).attr("y",d=>y(d.event)+y.bandwidth()/2+4).attr("text-anchor","end")
+    .attr("font-size",9.5).attr("fill",cssVar("--ink-3"))
+    .text(d=>d3.format("+,.0f")(hits(d))+" hits");
+
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>d+"%"));
+}
+const BT_LABEL={ground_ball:"Ground balls",line_drive:"Line drives",fly_ball:"Fly balls",popup:"Pop-ups"};
+const BT_ORDER=["ground_ball","line_drive","fly_ball","popup"];
+function renderBtype(){
+  const rows=BT_ORDER.map(b=>btypeGap.find(d=>d.park===PARK&&d.bb_type===b)).filter(Boolean);
+  const M={t:14,r:150,b:36,l:92}, W=540, rowH=46, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#btypeChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  if(!rows.length) return;
+  const ext=Math.max(0.012,d3.max(rows,d=>Math.abs(d.rel))*1.25);
+  const x=d3.scaleLinear().domain([-ext,ext]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.bb_type)).range([M.t,H-M.b]).padding(.42);
+  const c=d3.scaleDiverging(gapRamp()).domain([-ext,0,ext]);
+
+  x.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",H-M.b));
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(0),x(d.rel))).attr("y",d=>y(d.bb_type))
+    .attr("width",d=>Math.abs(x(d.rel)-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>c(d.rel))
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+BT_LABEL[d.bb_type]+"</b><br>BA − xBA "+fp(d.gap)+
+      "<br>league "+fp(d.lg_gap)+"<br>vs league "+fp(d.rel)+
+      (d.moe!=null?" ± "+f3(d.moe).slice(1):"")+"<br>"+fi(d.n)+" balls"))
+    .on("mouseleave",hideTip);
+
+  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.moe!=null)).join("line")
+    .attr("x1",d=>x(Math.max(d.rel-d.moe,-ext))).attr("x2",d=>x(Math.min(d.rel+d.moe,ext)))
+    .attr("y1",d=>y(d.bb_type)+y.bandwidth()/2).attr("y2",d=>y(d.bb_type)+y.bandwidth()/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2).attr("opacity",.8);
+  svg.append("g").selectAll("text.l").data(rows).join("text")
+    .attr("x",M.l-9).attr("y",d=>y(d.bb_type)+y.bandwidth()/2+4).attr("text-anchor","end")
+    .attr("font-size",10.5).attr("fill",cssVar("--ink-2")).text(d=>BT_LABEL[d.bb_type]);
+  // Fixed value column, same reason as the chart above.
+  svg.append("g").selectAll("text.v").data(rows).join("text")
+    .attr("x",W-M.r+12).attr("y",d=>y(d.bb_type)+y.bandwidth()/2+4).attr("text-anchor","start")
+    .attr("font-size",10.5).attr("font-weight",600).attr("fill",cssVar("--ink"))
+    .text(d=>fp(d.rel));
+  svg.append("g").selectAll("text.h").data(rows).join("text")
+    .attr("x",W-6).attr("y",d=>y(d.bb_type)+y.bandwidth()/2+4).attr("text-anchor","end")
+    .attr("font-size",9.5).attr("fill",cssVar("--ink-3"))
+    .text(d=>d3.format("+,.0f")(d.rel*d.n)+" hits");
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
+}
+
+/* ---------- strikeout park factor ---------- */
+function renderK(){
+  const rows=summary.filter(d=>d.k_pf!=null).sort((a,b)=>b.k_pf-a.k_pf);
+  if(!rows.length) return;
+  const M={t:10,r:56,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#kChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  const ext=d3.max(rows,d=>Math.abs(d.k_pf-1));
+  const x=d3.scaleLinear().domain([1-ext*1.15,1+ext*1.15]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.park)).range([M.t,H-M.b]).padding(.22);
+  // More strikeouts is fewer balls in play, so it shares the suppression end of the ramp.
+  const c=d3.scaleDiverging(gapRamp()).domain([1+ext,1,1-ext]);
+
+  x.ticks(9).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",H-M.b));
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(1),x(d.k_pf))).attr("y",d=>y(d.park))
+    .attr("width",d=>Math.abs(x(d.k_pf)-x(1))).attr("height",y.bandwidth())
+    .attr("fill",d=>c(d.k_pf)).attr("opacity",d=>d.park===PARK?1:.82)
+    .attr("stroke",d=>d.park===PARK?cssVar("--ink"):"none").attr("stroke-width",1.5)
+    .style("cursor","pointer")
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>factor "+d3.format(".3f")(d.k_pf)+
+      (d.k_pf_lo!=null?" ["+d3.format(".3f")(d.k_pf_lo)+", "+d3.format(".3f")(d.k_pf_hi)+"]":"")+
+      "<br>via hitters "+d3.format(".3f")(d.kpf_bat)+"<br>via pitchers "+d3.format(".3f")(d.kpf_pit)+
+      "<br>raw K% "+d3.format(".1%")(d.k_pct)+
+      (d.k_pa!=null?"<br>"+fi(d.k_pa)+" plate appearances":"")))
+    .on("mouseleave",hideTip)
+    .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); });
+  svg.append("g").selectAll("text").data(rows).join("text")
+    .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
+    .attr("font-size",9.5).attr("font-weight",d=>d.park===PARK?700:400)
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+  svg.append("g").selectAll("text.v").data(rows).join("text")
+    .attr("x",d=>d.k_pf>=1?x(d.k_pf)+5:x(d.k_pf)-5)
+    .attr("y",d=>y(d.park)+y.bandwidth()/2+3.5)
+    .attr("text-anchor",d=>d.k_pf>=1?"start":"end")
+    .attr("font-size",9).attr("fill",cssVar("--ink-3")).text(d=>d3.format(".3f")(d.k_pf));
+  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.k_pf_lo!=null)).join("line")
+    .attr("x1",d=>x(d.k_pf_lo)).attr("x2",d=>x(d.k_pf_hi))
+    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.7);
+  svg.append("line").attr("x1",x(1)).attr("x2",x(1)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(9).tickFormat(d3.format(".2f")));
+}
+
+/* ---------- park ranking + table ---------- */
+function renderRank(){
+  const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
+  const rows=summary.slice().sort((a,b)=>rel(a)-rel(b));
+  const M={t:10,r:20,b:34,l:150}, W=500, rowH=17, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#rankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  const ext=d3.max(rows,d=>Math.abs(rel(d)));
+  const x=d3.scaleLinear().domain([-ext*1.15,ext*1.15]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.park)).range([M.t,H-M.b]).padding(.24);
+
+  // A park is only distinguishable from the league if its interval clears zero.
+  // Nineteen of thirty-two are not, and drawing them at full strength implies an
+  // ordering the sample cannot support.
+  const moe=d=>d.gap_sem!=null?Z95*d.gap_sem:null;
+  const sig=d=>{const m=moe(d); return m!=null && Math.abs(rel(d))>m;};
+
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(0),x(rel(d)))).attr("y",d=>y(d.park))
+    .attr("width",d=>Math.abs(x(rel(d))-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>gapColor(rel(d)))
+    .attr("opacity",d=>d.park===PARK?1:(sig(d)?.85:.3))
+    .attr("stroke",d=>d.park===PARK?cssVar("--ink"):"none").attr("stroke-width",1.4)
+    .style("cursor","pointer")
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>"+
+      (d.hits!=null?fi(d.hits)+" hits vs "+fi(Math.round(d.xba_sum))+" expected<br>":"")+
+      "BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
+      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+f3(moe(d)).slice(1):"")+
+      "<br>"+fi(d.bip)+" balls in play"+
+      (d.gap_z!=null?" &middot; "+d3.format(".1f")(Math.abs(d.gap_z))+"σ":"")+
+      (d.hits_vs_lg!=null?"<br>"+d3.format("+,.0f")(d.hits_vs_lg)+" hits":"")+
+      (sig(d)?"":"<br><i>inside its own error bar</i>")))
+    .on("mouseleave",hideTip)
+    .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); });
+
+  // 95% interval on each park.
+  svg.append("g").selectAll("line.err").data(rows.filter(d=>moe(d)!=null)).join("line")
+    .attr("x1",d=>x(rel(d)-moe(d))).attr("x2",d=>x(rel(d)+moe(d)))
+    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.75);
+
+  svg.append("g").selectAll("text").data(rows).join("text")
+    .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
+    .attr("font-size",9).attr("font-weight",d=>d.park===PARK?700:400)
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("text").attr("x",x(0)).attr("y",M.t+9).attr("text-anchor","middle")
+    .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em")
+    .text("LEAGUE AVERAGE");
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
+
+  const rows2=summary.slice().sort((a,b)=>rel(a)-rel(b));
+  const hasK = rows2.some(d=>d.k_pct);
+  const t=d3.select("#parkTable");
+  t.html("<thead><tr><th>Park</th><th>Hits</th><th title='sum of xBA over the same balls'>Exp</th>"+
+    "<th title='hits minus summed xBA, against the league'>&Delta;H</th>"+
+    "<th>BA</th><th>xBA</th><th title='BA − xBA relative to league'>vs&nbsp;Lg</th>"+
+    "<th title='hitter mix divided out'>Adj</th>"+
+    (hasK?"<th>K%</th><th title='strikeout park factor'>K&nbsp;fac</th>":"")+
+    "<th title='feet of carry vs league'>Carry</th></tr></thead><tbody></tbody>");
+  t.select("tbody").selectAll("tr").data(rows2).join("tr")
+    .attr("class",d=>d.park===PARK?"me":null)
+    .style("cursor","pointer")
+    .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); })
+    .html(d=>"<td>"+d.name+"</td>"+
+      "<td>"+(d.hits==null?"—":fi(d.hits))+"</td>"+
+      "<td>"+(d.xba_sum==null?"—":fi(Math.round(d.xba_sum)))+"</td>"+
+      "<td>"+(d.hits_vs_lg==null?"—":d3.format("+,.0f")(d.hits_vs_lg))+"</td>"+
+      "<td>"+f3(d.ba).slice(1)+"</td><td>"+f3(d.xba).slice(1)+
+      "</td><td>"+fp(rel(d))+"</td><td>"+fp(d.adj_gap)+"</td>"+
+      (hasK?("<td>"+(d.k_pct?d3.format(".1%")(d.k_pct):"—")+"</td><td>"+
+        (d.k_pf==null?"—":d3.format(".3f")(d.k_pf))+"</td>"):"")+
+      "<td>"+(d.carry_ft==null?"—":f1(d.carry_ft))+"</td>");
+}
+
+/* ---------- season stability ---------- */
+function renderSeason(){
+  const rows=parkSeason.filter(d=>d.park===PARK).sort((a,b)=>a.season-b.season);
+  d3.select("#seasonTitle").text(nameOf[PARK]+", season by season");
+  const M={t:14,r:20,b:34,l:56}, W=1040, H=230;
+  const svg=d3.select("#seasonChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  if(!rows.length) return;
+  /* Each season is scored against that season's own league average, because the offset
+     between BA and xBA drifts year to year. */
+  const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
+  const x=d3.scaleBand().domain(rows.map(d=>d.season)).range([M.l,W-M.r]).padding(.5);
+  const ext=Math.max(0.03,d3.max(rows,d=>Math.abs(rel(d)))*1.25);
+  const y=d3.scaleLinear().domain([-ext,ext]).range([H-M.b,M.t]);
+
+  y.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(t)).attr("y2",y(t)));
+
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>x(d.season)).attr("width",x.bandwidth())
+    .attr("y",d=>Math.min(y(0),y(rel(d)))).attr("height",d=>Math.abs(y(rel(d))-y(0)))
+    .attr("fill",d=>gapColor(rel(d)))
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.season+"</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
+      "<br>vs league "+fp(rel(d))+(d.gap_moe!=null?" ± "+f3(d.gap_moe).slice(1):"")+
+      "<br>carry "+(d.carry_ft==null?"—":f1(d.carry_ft)+" ft")+
+      "<br>"+fi(d.bip)+" balls in play"))
+    .on("mouseleave",hideTip);
+
+  // One season is a sixth of the sample and roughly 2.4x the interval. Without these
+  // the year-to-year wobble reads as a trend.
+  svg.append("g").selectAll("g.err").data(rows.filter(d=>d.gap_moe!=null)).join("g")
+    .each(function(d){
+      const g=d3.select(this), cxx=x(d.season)+x.bandwidth()/2, w=Math.min(9,x.bandwidth()/3);
+      g.append("line").attr("x1",cxx).attr("x2",cxx)
+        .attr("y1",y(rel(d)-d.gap_moe)).attr("y2",y(rel(d)+d.gap_moe))
+        .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2);
+      [rel(d)-d.gap_moe, rel(d)+d.gap_moe].forEach(v=>
+        g.append("line").attr("x1",cxx-w).attr("x2",cxx+w).attr("y1",y(v)).attr("y2",y(v))
+          .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2));
+    });
+
+  svg.append("g").selectAll("text").data(rows).join("text")
+    .attr("x",d=>x(d.season)+x.bandwidth()/2)
+    .attr("y",d=>rel(d)>=0?y(rel(d))-6:y(rel(d))+13).attr("text-anchor","middle")
+    .attr("font-size",10).attr("fill",cssVar("--ink-2")).text(d=>fp(rel(d)));
+
+  svg.append("line").attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(0)).attr("y2",y(0))
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("text").attr("x",W-M.r-4).attr("y",y(0)-6).attr("text-anchor","end")
+    .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em")
+    .text("LEAGUE AVERAGE THAT SEASON");
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`).call(d3.axisBottom(x));
+  svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>fp(d)));
+  svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",13)
+    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3"))
+    .text("BA − xBA vs LEAGUE");
+}
+
+/* ---------- precision ledger + the 1/sqrt(n) curve ---------- */
+function renderPrecision(){
+  const L=PRECISION.ledger||[];
+  const t=d3.select("#precTable");
+  if(!L.length){ t.html(""); return; }
+  const fmtEst=r=>{
+    if(r.est==null) return "—";
+    if(r.unit==="BA") return fp(r.est);
+    if(r.unit==="ft") return d3.format("+.2f")(r.est)+" ft";
+    if(r.unit==="%")  return d3.format("+.0f")(r.est)+"%";
+    return d3.format(".3f")(r.est);
+  };
+  const fmtMoe=r=>{
+    if(r.moe==null) return "—";
+    if(r.unit==="BA") return "± "+f3(r.moe).slice(1);
+    if(r.unit==="ft") return "± "+d3.format(".2f")(r.moe);
+    if(r.unit==="%")  return "± "+d3.format(".0f")(r.moe);
+    return "± "+d3.format(".3f")(r.moe);
+  };
+  t.html("<thead><tr><th>Measurement</th><th>Chart</th><th>n</th><th>Estimate</th>"+
+    "<th>95%</th><th title='estimate divided by its margin of error'>÷ MoE</th></tr></thead><tbody></tbody>");
+  t.select("tbody").selectAll("tr").data(L).join("tr")
+    .attr("class",d=>d.ratio!=null&&d.ratio<1?"me":null)
+    .html(d=>"<td>"+d.label+"<br><span style='opacity:.6;font-size:.92em'>"+d.note+"</span></td>"+
+      "<td style='opacity:.7'>"+d.chart+"</td><td>"+fi(d.n)+"</td>"+
+      "<td>"+fmtEst(d)+"</td><td>"+fmtMoe(d)+"</td>"+
+      "<td>"+(d.ratio==null?"—":d3.format(".1f")(d.ratio)+"×")+"</td>");
+}
+
+function renderPower(){
+  const C=PRECISION.curve||[];
+  if(!C.length) return;
+  const M={t:16,r:22,b:42,l:56}, W=520, H=300;
+  const svg=d3.select("#powerChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  const x=d3.scaleLog().domain([600,d3.max(C,d=>d.n)*1.2]).range([M.l,W-M.r]);
+  const y=d3.scaleLinear().domain([0,d3.max(C,d=>d.effect)*1.08]).range([H-M.b,M.t]);
+
+  y.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(t)).attr("y2",y(t)));
+
+  svg.append("path").datum(C).attr("fill","none").attr("stroke",cssVar("--ink-2"))
+    .attr("stroke-width",2)
+    .attr("d",d3.line().x(d=>x(d.n)).y(d=>y(d.effect)).curve(d3.curveMonotoneX));
+
+  // Where the parks actually sit.
+  const s=byPark[PARK];
+  const marks=[{n:s?s.bip:0, label:(nameOf[PARK]||PARK)+", whole span"},
+               {n:s&&s.seasons?Math.round(s.bip/s.seasons):0, label:"one season"}]
+              .filter(m=>m.n>0);
+  marks.forEach(m=>{
+    svg.append("line").attr("x1",x(m.n)).attr("x2",x(m.n)).attr("y1",M.t).attr("y2",H-M.b)
+      .attr("stroke",cssVar("--accent")).attr("stroke-dasharray","3,3").attr("opacity",.8);
+    svg.append("text").attr("x",x(m.n)+4).attr("y",M.t+10)
+      .attr("font-size",8.5).attr("fill",cssVar("--accent")).text(m.label);
+  });
+
+  svg.append("g").selectAll("circle").data(C).join("circle")
+    .attr("cx",d=>x(d.n)).attr("cy",d=>y(d.effect)).attr("r",3).attr("fill",cssVar("--ink-2"))
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+fp(d.effect)+" of batting average</b><br>needs "+
+      fi(d.n)+" balls in play<br>before it exceeds its own error bar"))
+    .on("mouseleave",hideTip);
+
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5,"~s"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>fp(d)));
+  svg.append("text").attr("x",(W+M.l)/2).attr("y",H-8).attr("text-anchor","middle")
+    .attr("font-size",10).attr("fill",cssVar("--ink-3")).text("BALLS IN PLAY REQUIRED");
+  svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",13)
+    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3"))
+    .text("EFFECT SIZE, BA");
+
+  const sigCount=summary.filter(d=>d.gap_sem!=null &&
+    Math.abs((d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP))>Z95*d.gap_sem).length;
+  d3.select("#powerNote").html(
+    "A park sees about "+fi(Math.round(d3.median(summary,d=>d.bip)))+
+    " balls in play across these six seasons, which resolves an effect of roughly "+
+    fp(0.006)+" and no smaller. That is why only <b>"+sigCount+" of "+summary.length+
+    "</b> parks clear their own error bar — the rest are not neutral, they are unmeasured.");
+}
+
+function renderAll(){
+  gapColor=d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
+  renderReadout(); renderGrid(); renderSpray(); renderField();
+  renderCarry(); renderMix(); renderBtype(); renderK(); renderRank(); renderSeason();
+  renderPrecision(); renderPower();
+  // Sample size stated on the panel, not only in the tooltip.
+  const s0=byPark[PARK];
+  d3.select("#nCarry").text(s0&&s0.carry_n?fi(s0.carry_n)+" air balls at "+(nameOf[PARK]||PARK)
+    +" · error bars 95%":"");
+  d3.select("#nK").text(s0&&s0.k_pa?fi(s0.k_pa)+" plate appearances · error bars 95%":"");
+  d3.select("#nRank").text("bars faded where the interval spans zero");
+  paintRamp("#rampXba", xbaColor, 12);
+  paintRamp("#rampField", fieldColor(), 14);
+  d3.select("#legendGap").html('<span>−.10</span><span class="ramp" id="rampGap"></span><span>+.10</span>'+
+    '<span style="margin-left:6px">BA &minus; xBA</span>');
+  paintRamp("#rampGap", d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]), 14);
+}
+renderAll();
+/* colours are read from CSS custom properties, so a theme flip has to redraw */
+if(typeof matchMedia==="function"){
+  const mq=matchMedia("(prefers-color-scheme:dark)");
+  if(mq.addEventListener) mq.addEventListener("change",()=>renderAll());
+}
+</script>
