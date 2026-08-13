@@ -170,15 +170,26 @@ footer p{margin-bottom:9px;max-width:76ch}
   <div class="split">
     <div class="panel">
       <div class="panel-head"><h3>xBA by exit velocity and launch angle</h3>
-        <span class="legend"><span>.00</span><span class="ramp" id="rampXba"></span><span>1.00</span></span></div>
+        <span class="legend"><span>.00</span><span class="ramp" id="rampXba"></span><span>1.00</span>
+        <span style="margin-left:8px;opacity:.8">paler = fewer balls</span></span></div>
       <div class="chart-scroll"><svg id="gridChart"></svg></div>
       <p class="note" style="margin-top:10px">League-wide. Click any cell to drive the chart at right.</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h3>Actual outcome by spray angle</h3><span class="legend" id="sprayKey"></span></div>
+      <p class="note" style="margin:-4px 0 8px">Shaded bands are 95% intervals; the bars along the baseline are the sample in each bin.</p>
       <div class="chart-scroll"><svg id="sprayChart"></svg></div>
       <p class="note" id="sprayNote" style="margin-top:10px"></p>
     </div>
+  </div>
+  <div class="panel" style="margin-top:20px">
+    <div class="panel-head"><h3 id="cellFanTitle">The same cell, on the field</h3>
+      <span class="legend" id="cellFanKey"></span></div>
+    <div class="split" style="gap:20px">
+      <div><div class="chart-scroll"><svg id="cellFanLg"></svg></div></div>
+      <div><div class="chart-scroll"><svg id="cellFanPk"></svg></div></div>
+    </div>
+    <p class="note" id="cellFanNote" style="margin-top:10px"></p>
   </div>
 </section>
 
@@ -194,7 +205,8 @@ footer p{margin-bottom:9px;max-width:76ch}
   <div class="split">
     <div class="panel">
       <div class="panel-head"><h3 id="fieldTitle">Field</h3>
-        <span class="legend"><span>&minus;.30</span><span class="ramp" id="rampField"></span><span>+.30</span></span></div>
+        <span class="legend"><span>&minus;.30</span><span class="ramp" id="rampField"></span><span>+.30</span>
+        <span style="margin-left:8px;opacity:.8">faded = interval spans zero</span></span></div>
       <div class="chart-scroll"><svg id="fieldChart"></svg></div>
       <p class="note" style="margin-top:10px">
         Colour is BA&nbsp;&minus;&nbsp;xBA within each bin, on a wider scale than the park
@@ -408,6 +420,61 @@ function gapRamp(){
 }
 let gapColor = d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
 
+/* ---------- one visual language for sample size and error, used by every chart ----------
+   Rail: a small bar whose length encodes the count behind each mark. The scale is a
+   square root, because precision improves as the square root of the sample -- so a rail
+   twice as long really is an estimate twice as sharp, which a linear scale would not
+   convey. It also keeps 62 triples visible next to 25,000 balls in play.
+   Whisker: the 95% interval, drawn in the same weight everywhere. */
+const RAIL_W = 54;
+
+function drawRail(sel, rows, opts){
+  const {x0, getY, band, getN, fmt=fi} = opts;
+  const maxN = d3.max(rows, getN) || 1;
+  const w = d3.scaleSqrt().domain([0, maxN]).range([0, RAIL_W]);
+  const g = sel.append("g").attr("class","rail");
+  g.selectAll("rect.bg").data(rows).join("rect").attr("class","bg")
+    .attr("x",x0).attr("y",d=>getY(d)+band/2-3.5).attr("width",RAIL_W).attr("height",7)
+    .attr("fill",cssVar("--rule")).attr("opacity",.55);
+  g.selectAll("rect.fg").data(rows).join("rect").attr("class","fg")
+    .attr("x",x0).attr("y",d=>getY(d)+band/2-3.5)
+    .attr("width",d=>Math.max(1,w(getN(d)))).attr("height",7)
+    .attr("fill",cssVar("--ink-3")).attr("opacity",.85);
+  g.selectAll("text.n").data(rows).join("text")
+    .attr("x",x0+RAIL_W+6).attr("y",d=>getY(d)+band/2+3.5)
+    .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).text(d=>fmt(getN(d)));
+  return g;
+}
+
+/* Horizontal 95% whisker with end caps, for the row charts. */
+function drawWhisker(sel, rows, opts){
+  const {x, getY, band, lo, hi} = opts;
+  const g = sel.append("g").attr("class","err");
+  const cap = Math.min(4, band/3);
+  g.selectAll("line.mid").data(rows).join("line")
+    .attr("x1",d=>x(lo(d))).attr("x2",d=>x(hi(d)))
+    .attr("y1",d=>getY(d)+band/2).attr("y2",d=>getY(d)+band/2)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.1).attr("opacity",.85);
+  [lo,hi].forEach(f=>g.selectAll(null).data(rows).join("line")
+    .attr("x1",d=>x(f(d))).attr("x2",d=>x(f(d)))
+    .attr("y1",d=>getY(d)+band/2-cap).attr("y2",d=>getY(d)+band/2+cap)
+    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.1).attr("opacity",.85));
+  return g;
+}
+
+/* The shared caption every panel carries, so the encoding is stated once per chart. */
+function encodingKey(nLabel){
+  return '<span style="display:inline-flex;align-items:center;gap:5px">'+
+    '<svg width="26" height="8"><line x1="1" y1="4" x2="25" y2="4" stroke="currentColor" '+
+    'stroke-width="1.1"/><line x1="1" y1="1" x2="1" y2="7" stroke="currentColor" stroke-width="1.1"/>'+
+    '<line x1="25" y1="1" x2="25" y2="7" stroke="currentColor" stroke-width="1.1"/></svg>'+
+    '95% interval</span> &nbsp;'+
+    '<span style="display:inline-flex;align-items:center;gap:5px">'+
+    '<svg width="26" height="8"><rect x="0" y="1" width="26" height="6" fill="currentColor" '+
+    'opacity="0.3"/><rect x="0" y="1" width="16" height="6" fill="currentColor" opacity="0.8"/></svg>'+
+    (nLabel||"sample size")+' (&radic; scale)</span>';
+}
+
 const tip = d3.select("#tip");
 function showTip(ev, html){
   tip.html(html).style("opacity",1)
@@ -444,7 +511,8 @@ bandSel.selectAll("option").data(bandPairs).join("option")
   .attr("value",d=>d.ev_band+"|"+d.la_band)
   .text(d=>d.ev_band+" mph, "+d.la_band+"°");
 bandSel.property("value", BAND.ev_band+"|"+BAND.la_band).on("change", function(){
-  const [e,l]=this.value.split("|"); BAND={ev_band:e,la_band:l}; renderGrid(); renderSpray(); renderField();
+  const [e,l]=this.value.split("|"); BAND={ev_band:e,la_band:l};
+  renderGrid(); renderSpray(); renderCellFan(); renderField();
 });
 
 /* ramps in the legends */
@@ -504,6 +572,8 @@ function renderGrid(){
 
   const svg=d3.select("#gridChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
+  const gMaxN=d3.max(lgGrid,d=>d.n)||1;
+  const gridOpacity=d3.scaleSqrt().domain([0,gMaxN]).range([0.3,1]).clamp(true);
 
   svg.append("g").selectAll("rect")
     .data(lgGrid.filter(d=>d.n>=25)).join("rect")
@@ -511,9 +581,12 @@ function renderGrid(){
       .attr("x",d=>x(d.ev_bin)).attr("y",d=>y(d.la_bin))
       .attr("width",x.bandwidth()).attr("height",y.bandwidth())
       .attr("fill",d=>xbaColor(d.xba))
+      // Paler cells hold fewer balls. Square-root again, so opacity tracks precision.
+      .attr("opacity",d=>gridOpacity(d.n))
       .on("mousemove",(e,d)=>showTip(e,
         "<b>"+d.ev_bin+"–"+(d.ev_bin+2.5)+" mph, "+d.la_bin+"–"+(d.la_bin+2.5)+"°</b><br>"+
-        "xBA "+f3(d.xba)+" &middot; BA "+f3(d.ba)+"<br>"+fi(d.n)+" batted balls"))
+        "xBA "+f3(d.xba)+" &middot; BA "+f3(d.ba)+"<br>"+fi(d.n)+" batted balls"+
+        "<br>±"+f3(1.96*Math.sqrt(d.ba*(1-d.ba)/d.n)).slice(1)+" on the actual"))
       .on("mouseleave",hideTip)
       .on("click",(e,d)=>selectFromGrid(d))
       .on("keydown",(e,d)=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();selectFromGrid(d);} });
@@ -542,12 +615,12 @@ function laBandOf(v){ return v<0?"<0": v<10?"0-10": v<20?"10-20": v<25?"20-25": 
 function selectFromGrid(d){
   BAND={ev_band:evBandOf(d.ev_bin), la_band:laBandOf(d.la_bin)};
   bandSel.property("value",BAND.ev_band+"|"+BAND.la_band);
-  renderGrid(); renderSpray(); renderField();
+  renderGrid(); renderSpray(); renderCellFan(); renderField();
 }
 
 /* ---------- spray curve: the centerpiece ---------- */
 function renderSpray(){
-  const M={t:16,r:16,b:44,l:44}, W=520, H=372;
+  const M={t:16,r:16,b:62,l:44}, W=520, H=390;
   const svg=d3.select("#sprayChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
 
@@ -617,6 +690,19 @@ function renderSpray(){
       "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
     .on("mouseleave",hideTip);
 
+  // Sample rail: one bar per spray bin, square-root scaled, sitting on the baseline.
+  // The thin ends are the foul-line bins, which is where the curve is most dramatic
+  // and least certain.
+  const railMax=d3.max(lg,d=>d.n)||1;
+  const railH=d3.scaleSqrt().domain([0,railMax]).range([0,16]);
+  const bw=(x(5)-x(0))*0.8;
+  svg.append("g").selectAll("rect.nr").data(lg).join("rect").attr("class","nr")
+    .attr("x",d=>x(d.spray_bin+2.5)-bw/2).attr("width",bw)
+    .attr("y",d=>H-M.b+2).attr("height",d=>Math.max(1,railH(d.n)))
+    .attr("fill",cssVar("--ink-3")).attr("opacity",.5)
+    .on("mousemove",(e,d)=>showTip(e,fi(d.n)+" balls in this bin"))
+    .on("mouseleave",hideTip);
+
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(7).tickFormat(d=>d+"°"));
   svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
@@ -639,6 +725,96 @@ function renderSpray(){
     " bins, thinnest "+fi(nMin)+". Shaded bands are 95% Wilson intervals"+
     (pk.length?"; the park curve is coarser because one park holds a thirtieth of the contact.":".")+
     "</span>");
+}
+
+/* ---------- the selected contact cell, drawn on field geometry ----------
+   Inside one narrow speed/angle cell the carry distance is close to determined by
+   physics, so each spray wedge can be placed at its own median landing distance and
+   coloured by what actually happened there. It is the curve above, laid onto the field
+   the balls were hit into. */
+function drawCellFan(sel, rows, opts){
+  const {title, wedge, dist, ba, n, sub} = opts;
+  const W=470, H=400, cx=W/2, cy=H-30;
+  const svg=d3.select(sel).attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  const maxR=460;
+  const rPix=Math.min((W/2-6)/Math.sin(52*Math.PI/180), cy-20);
+  const r=d3.scaleLinear().domain([0,maxR]).range([0,rPix]);
+  const g=svg.append("g").attr("transform",`translate(${cx},${cy})`);
+
+  [100,200,300,400].forEach(v=>{
+    g.append("path").attr("d",d3.arc()({innerRadius:r(v),outerRadius:r(v),
+      startAngle:-48*Math.PI/180,endAngle:48*Math.PI/180}))
+      .attr("fill","none").attr("stroke",cssVar("--rule-2")).attr("opacity",.6);
+    g.append("text").attr("x",0).attr("y",-r(v)+3).attr("text-anchor","middle")
+      .attr("font-size",8).attr("fill",cssVar("--ink-3")).text(v+"'");
+  });
+  [-45,45].forEach(a=>{
+    const rad=a*Math.PI/180;
+    g.append("line").attr("x1",0).attr("y1",0)
+      .attr("x2",Math.sin(rad)*r(maxR)).attr("y2",-Math.cos(rad)*r(maxR))
+      .attr("stroke",cssVar("--rule-2"));
+  });
+
+  if(!rows.length){
+    svg.append("text").attr("x",cx).attr("y",cy/1.6).attr("text-anchor","middle")
+      .attr("font-size",11).attr("fill",cssVar("--ink-3")).text("not enough balls in this cell");
+    return;
+  }
+
+  // Wedge thickness carries the sample: a thin band is a bin you should not lean on.
+  const maxN=d3.max(rows,n)||1;
+  const thick=d3.scaleSqrt().domain([0,maxN]).range([5,30]);
+
+  g.selectAll("path.w").data(rows).join("path")
+    .attr("d",d=>{
+      const rr=r(dist(d)), t=thick(n(d))/2;
+      return d3.arc()({innerRadius:Math.max(0,rr-t), outerRadius:rr+t,
+        startAngle:wedge(d)[0]*Math.PI/180, endAngle:wedge(d)[1]*Math.PI/180});
+    })
+    .attr("fill",d=>xbaColor(ba(d)))
+    .on("mousemove",(e,d)=>showTip(e,
+      "<b>"+wedge(d)[0]+"° to "+wedge(d)[1]+"°</b><br>"+
+      "lands about "+Math.round(dist(d))+" ft<br>"+
+      "BA "+f3(ba(d))+(d.ba_lo!=null?" ["+f3(d.ba_lo).slice(1)+", "+f3(d.ba_hi).slice(1)+"]":"")+
+      "<br>"+fi(n(d))+" balls"))
+    .on("mouseleave",hideTip);
+
+  svg.append("text").attr("x",cx).attr("y",16).attr("text-anchor","middle")
+    .attr("font-size",10.5).attr("font-weight",600).attr("fill",cssVar("--ink")).text(title);
+  svg.append("text").attr("x",cx).attr("y",H-8).attr("text-anchor","middle")
+    .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em").text(sub);
+}
+
+function renderCellFan(){
+  const lg=lgSpray.filter(d=>d.ev_band===BAND.ev_band&&d.la_band===BAND.la_band&&d.dist!=null)
+                  .sort((a,b)=>a.spray_bin-b.spray_bin);
+  const pk=pkSpray.filter(d=>d.park===PARK&&d.ev_c===coarseEv(BAND.ev_band)&&
+                             d.la_c===coarseLa(BAND.la_band)&&d.dist!=null)
+                  .sort((a,b)=>a.spray_c-b.spray_c);
+
+  d3.select("#cellFanTitle").text(BAND.ev_band+" mph at "+BAND.la_band+"°, on the field");
+  drawCellFan("#cellFanLg", lg, {title:"League",
+    wedge:d=>[d.spray_bin,d.spray_bin+5], dist:d=>d.dist, ba:d=>d.ba, n:d=>d.n,
+    sub:"HOME PLATE · LEFT FIELD IS NEGATIVE"});
+  drawCellFan("#cellFanPk", pk, {title:nameOf[PARK]||PARK,
+    wedge:d=>[d.spray_c,d.spray_c+7.5], dist:d=>d.dist, ba:d=>d.ba, n:d=>d.n,
+    sub:"COARSER BANDS — ONE PARK, A THIRTIETH OF THE CONTACT"});
+
+  d3.select("#cellFanKey").html('<span>.00</span><span class="ramp" id="rampCell"></span>'+
+    '<span>1.00</span><span style="margin-left:6px">actual BA &middot; band thickness = sample</span>');
+  paintRamp("#rampCell", xbaColor, 12);
+
+  if(lg.length){
+    const near=lg.reduce((a,b)=>Math.abs(a.spray_bin+2.5)<Math.abs(b.spray_bin+2.5)?a:b);
+    const best=lg.reduce((a,b)=>a.ba>b.ba?a:b);
+    d3.select("#cellFanNote").html(
+      "Every wedge sits at the median distance those balls actually travelled, so the arc is "+
+      "roughly where this contact lands. Straight at "+Math.round(near.dist)+" ft it is worth <b>"+
+      f3(near.ba).slice(1)+"</b>; the same contact toward "+
+      (best.spray_bin<0?"left":"right")+" field at "+Math.round(best.dist)+" ft is worth <b>"+
+      f3(best.ba).slice(1)+"</b>. Same speed, same angle, same xBA.");
+  } else d3.select("#cellFanNote").text("");
 }
 
 /* ---------- field fan ---------- */
@@ -711,7 +887,7 @@ function renderField(){
 /* ---------- carry ranking ---------- */
 function renderCarry(){
   const rows=summary.filter(d=>d.carry_ft!=null).sort((a,b)=>b.carry_ft-a.carry_ft);
-  const M={t:10,r:52,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
+  const M={t:10,r:172,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#carryChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(d.carry_ft));
@@ -732,10 +908,11 @@ function renderCarry(){
       " ft vs league<br>"+fi(d.carry_n||d.n)+" balls hit in the air"))
     .on("mouseleave",hideTip);
 
-  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.carry_moe!=null)).join("line")
-    .attr("x1",d=>x(d.carry_ft-d.carry_moe)).attr("x2",d=>x(d.carry_ft+d.carry_moe))
-    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
-    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.7);
+  drawWhisker(svg, rows.filter(d=>d.carry_moe!=null), {
+    x, getY:d=>y(d.park), band:y.bandwidth(),
+    lo:d=>d.carry_ft-d.carry_moe, hi:d=>d.carry_ft+d.carry_moe});
+  drawRail(svg, rows, {x0:W-M.r+16, getY:d=>y(d.park), band:y.bandwidth(),
+    getN:d=>d.carry_n||d.n});
 
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
@@ -785,10 +962,11 @@ function renderMix(){
 
   // Ratio intervals are asymmetric, so these are drawn from the bounds rather than
   // as a symmetric bar. Triples are the row that needs it.
-  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.pct_lo!=null)).join("line")
-    .attr("x1",d=>x(Math.max(d.pct_lo,-ext))).attr("x2",d=>x(Math.min(d.pct_hi,ext)))
-    .attr("y1",d=>y(d.event)+y.bandwidth()/2).attr("y2",d=>y(d.event)+y.bandwidth()/2)
-    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2).attr("opacity",.8);
+  drawWhisker(svg, rows.filter(d=>d.pct_lo!=null), {
+    x, getY:d=>y(d.event), band:y.bandwidth(),
+    lo:d=>Math.max(d.pct_lo,-ext), hi:d=>Math.min(d.pct_hi,ext)});
+  // Rail counts THAT hit type, not balls in play: 62 triples is the sample doing the work.
+  drawRail(svg, rows, {x0:W-M.r+92, getY:d=>y(d.event), band:y.bandwidth(), getN:d=>d.k||0});
   svg.append("g").selectAll("text.l").data(rows).join("text")
     .attr("x",M.l-9).attr("y",d=>y(d.event)+y.bandwidth()/2+4).attr("text-anchor","end")
     .attr("font-size",10.5).attr("fill",cssVar("--ink-2")).text(d=>EV_LABEL[d.event]);
@@ -836,10 +1014,10 @@ function renderBtype(){
       (d.moe!=null?" ± "+f3(d.moe).slice(1):"")+"<br>"+fi(d.n)+" balls"))
     .on("mouseleave",hideTip);
 
-  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.moe!=null)).join("line")
-    .attr("x1",d=>x(Math.max(d.rel-d.moe,-ext))).attr("x2",d=>x(Math.min(d.rel+d.moe,ext)))
-    .attr("y1",d=>y(d.bb_type)+y.bandwidth()/2).attr("y2",d=>y(d.bb_type)+y.bandwidth()/2)
-    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2).attr("opacity",.8);
+  drawWhisker(svg, rows.filter(d=>d.moe!=null), {
+    x, getY:d=>y(d.bb_type), band:y.bandwidth(),
+    lo:d=>Math.max(d.rel-d.moe,-ext), hi:d=>Math.min(d.rel+d.moe,ext)});
+  drawRail(svg, rows, {x0:W-M.r+92, getY:d=>y(d.bb_type), band:y.bandwidth(), getN:d=>d.n});
   svg.append("g").selectAll("text.l").data(rows).join("text")
     .attr("x",M.l-9).attr("y",d=>y(d.bb_type)+y.bandwidth()/2+4).attr("text-anchor","end")
     .attr("font-size",10.5).attr("fill",cssVar("--ink-2")).text(d=>BT_LABEL[d.bb_type]);
@@ -862,7 +1040,7 @@ function renderBtype(){
 function renderK(){
   const rows=summary.filter(d=>d.k_pf!=null).sort((a,b)=>b.k_pf-a.k_pf);
   if(!rows.length) return;
-  const M={t:10,r:56,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
+  const M={t:10,r:172,b:34,l:150}, W=1040, rowH=19, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#kChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(d.k_pf-1));
@@ -895,10 +1073,10 @@ function renderK(){
     .attr("y",d=>y(d.park)+y.bandwidth()/2+3.5)
     .attr("text-anchor",d=>d.k_pf>=1?"start":"end")
     .attr("font-size",9).attr("fill",cssVar("--ink-3")).text(d=>d3.format(".3f")(d.k_pf));
-  svg.append("g").selectAll("line.err").data(rows.filter(d=>d.k_pf_lo!=null)).join("line")
-    .attr("x1",d=>x(d.k_pf_lo)).attr("x2",d=>x(d.k_pf_hi))
-    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
-    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.7);
+  drawWhisker(svg, rows.filter(d=>d.k_pf_lo!=null), {
+    x, getY:d=>y(d.park), band:y.bandwidth(), lo:d=>d.k_pf_lo, hi:d=>d.k_pf_hi});
+  drawRail(svg, rows, {x0:W-M.r+16, getY:d=>y(d.park), band:y.bandwidth(),
+    getN:d=>d.k_pa||0});
   svg.append("line").attr("x1",x(1)).attr("x2",x(1)).attr("y1",M.t).attr("y2",H-M.b)
     .attr("stroke",cssVar("--ink-3"));
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
@@ -909,7 +1087,7 @@ function renderK(){
 function renderRank(){
   const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
   const rows=summary.slice().sort((a,b)=>rel(a)-rel(b));
-  const M={t:10,r:20,b:34,l:150}, W=500, rowH=17, H=M.t+M.b+rows.length*rowH;
+  const M={t:10,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#rankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(rel(d)));
@@ -941,10 +1119,10 @@ function renderRank(){
     .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); });
 
   // 95% interval on each park.
-  svg.append("g").selectAll("line.err").data(rows.filter(d=>moe(d)!=null)).join("line")
-    .attr("x1",d=>x(rel(d)-moe(d))).attr("x2",d=>x(rel(d)+moe(d)))
-    .attr("y1",d=>y(d.park)+y.bandwidth()/2).attr("y2",d=>y(d.park)+y.bandwidth()/2)
-    .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1).attr("opacity",.75);
+  drawWhisker(svg, rows.filter(d=>moe(d)!=null), {
+    x, getY:d=>y(d.park), band:y.bandwidth(),
+    lo:d=>rel(d)-moe(d), hi:d=>rel(d)+moe(d)});
+  drawRail(svg, rows, {x0:W-M.r+14, getY:d=>y(d.park), band:y.bandwidth(), getN:d=>d.bip});
 
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
@@ -986,7 +1164,7 @@ function renderRank(){
 function renderSeason(){
   const rows=parkSeason.filter(d=>d.park===PARK).sort((a,b)=>a.season-b.season);
   d3.select("#seasonTitle").text(nameOf[PARK]+", season by season");
-  const M={t:14,r:20,b:34,l:56}, W=1040, H=230;
+  const M={t:14,r:20,b:56,l:56}, W=1040, H=252;
   const svg=d3.select("#seasonChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   if(!rows.length) return;
@@ -1012,7 +1190,7 @@ function renderSeason(){
 
   // One season is a sixth of the sample and roughly 2.4x the interval. Without these
   // the year-to-year wobble reads as a trend.
-  svg.append("g").selectAll("g.err").data(rows.filter(d=>d.gap_moe!=null)).join("g")
+  svg.append("g").attr("class","err").selectAll("g").data(rows.filter(d=>d.gap_moe!=null)).join("g")
     .each(function(d){
       const g=d3.select(this), cxx=x(d.season)+x.bandwidth()/2, w=Math.min(9,x.bandwidth()/3);
       g.append("line").attr("x1",cxx).attr("x2",cxx)
@@ -1033,6 +1211,14 @@ function renderSeason(){
   svg.append("text").attr("x",W-M.r-4).attr("y",y(0)-6).attr("text-anchor","end")
     .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em")
     .text("LEAGUE AVERAGE THAT SEASON");
+  const sMax=d3.max(rows,d=>d.bip)||1;
+  const sH=d3.scaleSqrt().domain([0,sMax]).range([0,14]);
+  svg.append("g").selectAll("rect.nr").data(rows).join("rect").attr("class","nr")
+    .attr("x",d=>x(d.season)).attr("width",x.bandwidth())
+    .attr("y",H-M.b+20).attr("height",d=>Math.max(1,sH(d.bip)))
+    .attr("fill",cssVar("--ink-3")).attr("opacity",.45)
+    .on("mousemove",(e,d)=>showTip(e,fi(d.bip)+" balls in play in "+d.season))
+    .on("mouseleave",hideTip);
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`).call(d3.axisBottom(x));
   svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
     .call(d3.axisLeft(y).ticks(5).tickFormat(d=>fp(d)));
@@ -1127,13 +1313,13 @@ function renderAll(){
   gapColor=d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
   renderReadout(); renderGrid(); renderSpray(); renderField();
   renderCarry(); renderMix(); renderBtype(); renderK(); renderRank(); renderSeason();
-  renderPrecision(); renderPower();
+  renderCellFan(); renderPrecision(); renderPower();
   // Sample size stated on the panel, not only in the tooltip.
   const s0=byPark[PARK];
-  d3.select("#nCarry").text(s0&&s0.carry_n?fi(s0.carry_n)+" air balls at "+(nameOf[PARK]||PARK)
-    +" · error bars 95%":"");
-  d3.select("#nK").text(s0&&s0.k_pa?fi(s0.k_pa)+" plate appearances · error bars 95%":"");
-  d3.select("#nRank").text("bars faded where the interval spans zero");
+  d3.select("#nCarry").html(encodingKey("balls hit in the air"));
+  d3.select("#nK").html(encodingKey("plate appearances"));
+  d3.select("#nRank").html(encodingKey("balls in play")+
+    " &nbsp;·&nbsp; faded = interval spans zero");
   paintRamp("#rampXba", xbaColor, 12);
   paintRamp("#rampField", fieldColor(), 14);
   d3.select("#legendGap").html('<span>−.10</span><span class="ramp" id="rampGap"></span><span>+.10</span>'+

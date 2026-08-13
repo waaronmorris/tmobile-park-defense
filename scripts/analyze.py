@@ -378,9 +378,14 @@ def main():
                            labels=["<80", "80-90", "90-95", "95-100", "100-105", "105+"])
     sp["la_band"] = pd.cut(sp["la"], [-90, 0, 10, 20, 25, 30, 40, 90],
                            labels=["<0", "0-10", "10-20", "20-25", "25-30", "30-40", "40+"])
+    # Median landing distance travels with each bin. Inside a narrow speed/angle cell the
+    # distance is close to determined by physics, so this lets the same numbers be drawn
+    # on field geometry rather than on an abstract axis.
     lg_spray = (sp.groupby(["ev_band", "la_band", "spray_bin"], observed=True)
-                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index())
+                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
+                     dist=("hc_dist", "median")).reset_index())
     lg_spray = add_ba_ci(lg_spray[lg_spray["n"] >= 30].copy())
+    lg_spray["dist"] = lg_spray["dist"].round(1)
     # A single park holds ~1/30th of the league's contact, so the per-park version of the
     # same curve needs coarser bands to keep each cell above noise.
     sp["ev_c"] = pd.cut(sp["ev"], [0, 90, 100, 200], labels=["<90", "90-100", "100+"])
@@ -388,8 +393,10 @@ def main():
                         labels=["<10", "10-25", "25-40", "40+"])
     sp["spray_c"] = (sp["spray"] // 7.5) * 7.5
     pk_spray = (sp.groupby(["park", "ev_c", "la_c", "spray_c"], observed=True)
-                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index())
+                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
+                     dist=("hc_dist", "median")).reset_index())
     pk_spray = add_ba_ci(pk_spray[pk_spray["n"] >= 20].copy())
+    pk_spray["dist"] = pk_spray["dist"].round(1)
     lg_spray_c = (sp.groupby(["ev_c", "la_c", "spray_c"], observed=True)
                   .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index())
     lg_spray_c = add_ba_ci(lg_spray_c)
