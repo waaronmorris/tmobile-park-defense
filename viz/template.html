@@ -277,7 +277,7 @@ footer b{color:var(--chalk);font-weight:500}
     </div>
     <div class="panel">
       <div class="panel-head"><h3>Actual outcome by spray angle</h3><span class="legend" id="sprayKey"></span></div>
-      <p class="note" style="margin:-4px 0 8px">Shaded bands are 95% intervals; the bars along the baseline are the sample in each bin.</p>
+      <p class="note" style="margin:-4px 0 10px">Every line is one ballpark, plotted against the direction the ball was hit. <b>Green</b> is the park you have selected; <b>blue</b> is every other ballpark, and clicking one selects it; <b>grey</b> is the league mean across all of them. The <b>dashed rule</b> is xBA, which is flat because direction is not one of its inputs. Green whiskers are the selected park&rsquo;s 95% interval, and the bars along the baseline are how many league balls fall in each bin.</p>
       <div class="chart-scroll"><svg id="sprayChart"></svg></div>
       <p class="note" id="sprayNote" style="margin-top:10px"></p>
     </div>
@@ -889,10 +889,10 @@ function renderSpray(){
     .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text("BATTING AVERAGE");
 
   d3.select("#sprayKey").html(
-    '<span style="color:var(--accent)">●</span> '+nameOf[PARK]+
-    ' &nbsp; <span style="color:var(--ink-2)">●</span> League mean'+
-    ' &nbsp; <span style="color:var(--cold)">╱</span> the other 31 parks'+
-    ' &nbsp; <span style="color:var(--ink-3)">--</span> xBA');
+    '<span style="color:var(--accent)">━</span> '+nameOf[PARK]+
+    ' &nbsp; <span style="color:var(--cold)">━</span> other parks ('+(others.size-1)+')'+
+    ' &nbsp; <span style="color:var(--ink-2)">━</span> league mean'+
+    ' &nbsp; <span style="color:var(--ink-3)">╌╌</span> xBA');
 
   const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba);
   /* The single dashed rule is honest only if every park really is assigned the same
