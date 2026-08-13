@@ -12,6 +12,7 @@ any static host and works offline.
 Records are packed columnar (one array per field, plus a shared string table) because the
 row-of-objects form repeats every key thousands of times and roughly triples the payload.
 """
+import base64
 import json
 import re
 import sys
@@ -63,7 +64,9 @@ def main():
     payload = json.dumps(bundle, separators=(",", ":"))
     d3 = (ROOT / "viz" / "vendor" / "d3.min.js").read_text()
     tpl = (ROOT / "viz" / "template.html").read_text()
-    body = tpl.replace("/*__D3__*/", d3).replace('"__DATA__"', payload)
+    body = (tpl.replace("/*__D3__*/", d3)
+               .replace('"__DATA__"', payload)
+               .replace("/*__FONTS__*/", font_faces()))
 
     args = sys.argv[1:]
     out = Path(args[args.index("--out") + 1]) if "--out" in args else ROOT / "docs" / "index.html"
@@ -81,20 +84,51 @@ SITE_NAV = """
 """
 
 SITE_CSS = """
-/* Served inside morris-labs, which commits to a single dark ground, so the
-   theme-aware palette is pinned dark and the page background is matched to the
-   site's ink rather than left to the viewer's OS setting. */
-:root{ --ground:#0B1210; }
+/* The page owns its palette outright -- no ground override here, or the board
+   texture would be painted over by the host's colour. */
 .sitebar{
-  display:flex; align-items:center; gap:10px;
-  padding:11px 24px; border-bottom:1px solid var(--rule);
-  background:var(--surface); font-family:var(--mono);
-  font-size:.7rem; letter-spacing:.11em; text-transform:uppercase;
+  display:flex; align-items:center; gap:11px;
+  padding:12px 26px; border-bottom:1px solid var(--rule);
+  background:var(--panel); font-family:var(--mono);
+  font-size:.64rem; letter-spacing:.18em; text-transform:uppercase;
 }
-.sitebar-back{ color:var(--accent); text-decoration:none }
+.sitebar-back{ color:var(--led); text-decoration:none }
 .sitebar-back:hover{ text-decoration:underline }
-.sitebar-sep,.sitebar-here{ color:var(--ink-3) }
+.sitebar-sep,.sitebar-here{ color:var(--faint) }
 """
+
+
+FONTS = [
+    ("Oswald", 500, "oswald-latin-500-normal.woff2"),
+    ("Oswald", 600, "oswald-latin-600-normal.woff2"),
+    ("IBM Plex Mono", 400, "ibm-plex-mono-latin-400-normal.woff2"),
+    ("IBM Plex Mono", 600, "ibm-plex-mono-latin-600-normal.woff2"),
+    ("IBM Plex Sans", 400, "ibm-plex-sans-latin-400-normal.woff2"),
+    ("IBM Plex Sans", 500, "ibm-plex-sans-latin-500-normal.woff2"),
+]
+
+
+def font_faces() -> str:
+    """
+    Inline the two faces as data URIs.
+
+    The page has to work from a file:// path and from two different hosts, so a
+    linked font is not an option -- a silent fallback to a system sans would take
+    the condensed scoreboard lettering with it. Latin subsets only, ~64 KB total
+    against a megabyte of data.
+    """
+    out = []
+    for family, weight, fname in FONTS:
+        p = ROOT / "viz" / "fonts" / fname
+        if not p.exists():
+            print(f"  WARNING: missing font {fname}; falling back to system stack")
+            continue
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        out.append(
+            f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};"
+            f"font-display:swap;src:url(data:font/woff2;base64,{b64}) format('woff2');}}"
+        )
+    return "\n".join(out)
 
 
 def wrap_document(body: str) -> str:

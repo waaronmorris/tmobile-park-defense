@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from parks import park_id, park_name
+from parks import park_id, park_name, park_short
 from stats import wilson, ratio_ci, moe_for_proportion, n_needed, Z95
 
 
@@ -298,7 +298,7 @@ def main():
         k_v = int((nbv["events"].isin(["strikeout", "strikeout_double_play"])).sum())
         pa_v = len(vis) + len(nbv)
         rows.append({
-            "park": pid, "name": park_name(pid), "bip": len(g), "pa": pa,
+            "park": pid, "name": park_name(pid), "short": park_short(pid), "bip": len(g), "pa": pa,
             # Raw totals, so the rate can always be traced back to the counts behind it.
             "hits": int(g["is_hit"].sum()), "xba_sum": float(g["xba"].sum()),
             "hits_vs_xba": float(g["is_hit"].sum() - g["xba"].sum()),

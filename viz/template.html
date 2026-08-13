@@ -1,137 +1,236 @@
 <title>The xBA Blind Spot</title>
 <style>
-/* ---- tokens: light is the bare :root, dark redefines tokens only ---- */
+/* ============================================================================
+   Outfield board.
+
+   The subject is a ballpark, and a ballpark's own display surface is a matrix of
+   bulbs that are dark until a number needs them. That is the whole design: an
+   unlit board that lights only where there is data. It also settles a conflict —
+   this page sits inside a site whose identity is already a dot-matrix LED panel,
+   and a scoreboard is the one thing that literally is one.
+
+   Single visual world, deliberately: a scoreboard is not a light-mode object, so
+   there is no light palette. Every colour is painted explicitly rather than
+   inherited from the host.
+
+   Two lit colours, each with one job. Amber is the board's own readout and is
+   spent only on the headline numbers. Green marks what is live — the selected
+   park, the active cell — and nothing else. Data scales are semantic and belong
+   to neither.
+   ========================================================================== */
+
+/*__FONTS__*/
+
 :root{
-  --ground:#F1F4F3; --surface:#FFFFFF; --surface-2:#E9EEEC;
-  --ink:#0E1F1D; --ink-2:#415653; --ink-3:#6E8481;
-  --rule:#D3DCDA; --rule-2:#BCC8C6;
-  --accent:#00706B; --accent-soft:#D3EAE6;
-  --cold:#22638F; --hot:#B4551C; --mid:#93A5A3;
-  --shadow:0 1px 2px rgba(14,31,29,.06),0 8px 24px rgba(14,31,29,.05);
-  --grid:#E3E9E8;
-}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --ground:#0A1514; --surface:#111E1D; --surface-2:#182726;
-    --ink:#E9F0EE; --ink-2:#A3B7B4; --ink-3:#7B908D;
-    --rule:#223533; --rule-2:#2F4643;
-    --accent:#3FD0C0; --accent-soft:#12302E;
-    --cold:#4E9FD6; --hot:#E08944; --mid:#6B7F7D;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
-    --grid:#1B2A29;
-  }
-}
-:root[data-theme="dark"]{
-  --ground:#0A1514; --surface:#111E1D; --surface-2:#182726;
-  --ink:#E9F0EE; --ink-2:#A3B7B4; --ink-3:#7B908D;
-  --rule:#223533; --rule-2:#2F4643;
-  --accent:#3FD0C0; --accent-soft:#12302E;
-  --cold:#4E9FD6; --hot:#E08944; --mid:#6B7F7D;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
-  --grid:#1B2A29;
+  /* -- board surfaces -- */
+  --board:#080B0A;
+  --panel:#0E1312;
+  --panel-2:#141A18;
+  --rule:#1C2422;
+  --rule-2:#28332F;
+
+  /* -- lit -- */
+  --bulb:#FFB627;          /* incandescent; the readout, and nothing else */
+  --bulb-dim:#7A5714;
+  --led:#57D97A;           /* live / selected only */
+  --led-soft:#10221A;
+
+  /* -- text ramp, cool against the warm bulb -- */
+  --chalk:#E8EFEA;
+  --dim:#93A69E;
+  --faint:#74857E;   /* measured 4.85:1 on --panel; 4.5 is the floor for 10px labels */
+
+  /* -- semantic data scales; deliberately not the accents -- */
+  --cold:#3E86C9;
+  --hot:#F2833C;
+  --mid:#5C6B67;
+
+  /* -- names the chart code already binds to -- */
+  --ground:var(--board);
+  --surface:var(--panel);
+  --surface-2:var(--panel-2);
+  --ink:var(--chalk);
+  --ink-2:var(--dim);
+  --ink-3:var(--faint);
+  --accent:var(--led);
+  --accent-soft:var(--led-soft);
+  --grid:#161E1C;
+  --shadow:0 1px 0 rgba(255,255,255,.02), 0 18px 40px rgba(0,0,0,.5);
+
+  --display:"Oswald",ui-sans-serif,system-ui,"Arial Narrow",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,sans-serif;
+
+  /* the bulb pitch, used by the ground texture and the lit numerals alike */
+  --pitch:4px;
 }
 
 *{box-sizing:border-box}
-:root{
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
-}
+
+/* The ground is not flat black — it is a field of unlit bulbs. This is the
+   texture the whole design rests on, so it is on the body rather than applied
+   decoratively to a hero. */
 body{
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:var(--sans); font-size:16px; line-height:1.6;
-  -webkit-font-smoothing:antialiased; font-variant-numeric:tabular-nums;
+  margin:0;
+  color:var(--chalk);
+  background-color:var(--board);
+  background-image:radial-gradient(var(--rule) 0.7px, transparent 0.8px);
+  background-size:var(--pitch) var(--pitch);
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
 }
-.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-h1,h2,h3{text-wrap:balance;margin:0;letter-spacing:-.025em;font-weight:660;line-height:1.15}
-h1{font-size:clamp(2rem,4.6vw,3.35rem);letter-spacing:-.04em}
-h2{font-size:clamp(1.4rem,2.4vw,1.9rem)}
-h3{font-size:1.02rem;letter-spacing:-.01em}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px}
+
+h1,h2,h3{
+  margin:0;font-family:var(--display);font-weight:600;
+  text-transform:uppercase;line-height:1.05;text-wrap:balance;
+}
+h1{font-size:clamp(2.4rem,6vw,4.6rem);letter-spacing:.005em}
+h2{font-size:clamp(1.35rem,2.6vw,2.05rem);letter-spacing:.02em}
+h3{font-size:.95rem;letter-spacing:.06em;font-weight:500;color:var(--chalk)}
 p{margin:0}
-a{color:var(--accent)}
+a{color:var(--led);text-underline-offset:3px}
+a:hover{text-decoration-thickness:2px}
 
+/* Eyebrows carry the sample the section rests on. The number is the point —
+   it is not a decorative label, it says how much evidence is underneath. */
 .eyebrow{
-  font-family:var(--mono); font-size:.685rem; letter-spacing:.16em;
-  text-transform:uppercase; color:var(--ink-3);
+  display:flex;align-items:baseline;gap:12px;
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--faint);
 }
-.lede{font-size:clamp(1.02rem,1.5vw,1.18rem);color:var(--ink-2);max-width:64ch}
-.note{font-size:.85rem;color:var(--ink-3);max-width:72ch}
+.eyebrow b{color:var(--bulb);font-weight:600;letter-spacing:.08em}
 
-/* ---- masthead ---- */
-header.top{border-bottom:1px solid var(--rule);background:var(--surface)}
-.masthead{display:flex;flex-direction:column;gap:20px;padding:52px 0 40px}
-.rule-row{display:flex;align-items:center;gap:14px}
+.lede{font-family:var(--sans);font-size:clamp(1rem,1.4vw,1.14rem);color:var(--chalk);
+  max-width:58ch;line-height:1.6;opacity:.92}
+.note{font-family:var(--sans);font-size:.855rem;color:var(--dim);max-width:70ch;line-height:1.62}
+.note b{color:var(--chalk);font-weight:500}
+
+/* ---- the board ---------------------------------------------------------- */
+header.top{
+  border-bottom:1px solid var(--rule);
+  background:
+    radial-gradient(120% 140% at 50% -20%, rgba(255,182,39,.05), transparent 60%),
+    var(--panel);
+}
+.masthead{display:flex;flex-direction:column;gap:26px;padding-block:64px 34px}
+.rule-row{display:flex;align-items:center;gap:16px}
 .rule-row::after{content:"";flex:1;height:1px;background:var(--rule)}
 
-/* readout strip: the four numbers that carry the argument */
 .readout{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));
-  gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:3px;overflow:hidden;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:1px;background:var(--rule);
+  border:1px solid var(--rule);
 }
-.stat{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:5px}
-.stat .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
-.stat .v{font-size:1.72rem;font-weight:660;letter-spacing:-.035em;line-height:1}
-.stat .s{font-size:.79rem;color:var(--ink-2)}
-.v.cold{color:var(--cold)} .v.hot{color:var(--hot)}
-
-/* ---- sections ---- */
-section{padding:56px 0;border-bottom:1px solid var(--rule)}
-.sec-head{display:flex;flex-direction:column;gap:12px;margin-bottom:28px;max-width:70ch}
-
-.panel{
-  background:var(--surface);border:1px solid var(--rule);border-radius:4px;
-  box-shadow:var(--shadow);padding:20px;
+.stat{background:var(--panel);padding:18px 20px 20px;display:flex;flex-direction:column;gap:7px}
+.stat .k{
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--faint);
 }
-.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+/* The signature: numerals filled with the bulb grid so they read as lit rather
+   than printed. Guarded — without background-clip the fill would erase them. */
+.stat .v{
+  font-family:var(--display);font-weight:600;
+  font-size:2.7rem;line-height:.95;letter-spacing:.01em;
+  color:var(--bulb);
+}
+@supports ((background-clip:text) or (-webkit-background-clip:text)){
+  .stat .v{
+    background-image:radial-gradient(currentColor 62%, transparent 64%);
+    background-size:var(--pitch) var(--pitch);
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 0 7px rgba(255,182,39,.28));
+  }
+  .stat .v.cold{filter:drop-shadow(0 0 7px rgba(62,134,201,.28))}
+}
+.stat .v.cold{color:var(--cold)}
+.stat .v.hot{color:var(--hot)}
+.stat .s{font-size:.72rem;color:var(--dim);line-height:1.5}
+
+/* ---- bays --------------------------------------------------------------- */
+section{padding-block:60px;border-bottom:1px solid var(--rule)}
+.sec-head{display:flex;flex-direction:column;gap:14px;margin-bottom:30px;max-width:74ch}
+
+.panel{background:var(--panel);border:1px solid var(--rule);padding:20px 20px 22px;min-width:0}
+.panel-head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  margin-bottom:16px;flex-wrap:wrap;
+  border-bottom:1px solid var(--rule);padding-bottom:11px;
+}
 .split{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:20px}
+.split>*{min-width:0}
 @media(max-width:900px){.split{grid-template-columns:1fr}}
 
 .chart-scroll{overflow-x:auto}
 svg{display:block;max-width:100%;height:auto}
-text{font-family:var(--mono);fill:var(--ink-2)}
+text{font-family:var(--mono);fill:var(--dim)}
 .axis line,.axis path{stroke:var(--rule-2)}
-.axis text{font-size:10px;fill:var(--ink-3)}
+.axis text{font-size:10px;fill:var(--faint)}
 .gridline{stroke:var(--grid)}
 
-/* ---- controls ---- */
+/* ---- controls ----------------------------------------------------------- */
 .controls{
-  position:sticky;top:0;z-index:20;background:var(--surface);
-  border-bottom:1px solid var(--rule);padding:11px 0;
+  position:sticky;top:0;z-index:20;background:var(--panel);
+  border-bottom:1px solid var(--rule);padding:12px 0;
 }
-.ctl-row{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
-label.ctl{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.7rem;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3)}
+.ctl-row{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+label.ctl{
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0;max-width:100%;
+  font-family:var(--mono);font-size:.64rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--faint);
+}
 select{
-  font-family:var(--mono);font-size:.82rem;letter-spacing:0;text-transform:none;
-  background:var(--surface-2);color:var(--ink);border:1px solid var(--rule-2);
-  border-radius:3px;padding:6px 9px;
+  font-family:var(--mono);font-size:.8rem;letter-spacing:0;text-transform:none;
+  background:var(--panel-2);color:var(--chalk);
+  border:1px solid var(--rule-2);border-radius:0;padding:7px 10px;max-width:100%;
 }
-select:focus-visible,button:focus-visible,.cell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select:hover{border-color:var(--led)}
+select:focus-visible,button:focus-visible,.cell:focus-visible,a:focus-visible{
+  outline:2px solid var(--led);outline-offset:2px;
+}
 
-.legend{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.68rem;color:var(--ink-3)}
-.ramp{height:9px;width:132px;border-radius:2px;border:1px solid var(--rule-2)}
+.legend{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:var(--mono);
+  font-size:.66rem;color:var(--faint);min-width:0}
+.ramp{height:9px;width:130px;border:1px solid var(--rule-2)}
 
 .tip{
-  position:fixed;pointer-events:none;z-index:60;background:var(--surface);
-  border:1px solid var(--rule-2);border-radius:3px;padding:8px 10px;
-  font-family:var(--mono);font-size:.71rem;line-height:1.5;color:var(--ink);
-  box-shadow:var(--shadow);opacity:0;transition:opacity .1s;max-width:250px;
+  position:fixed;pointer-events:none;z-index:60;
+  background:var(--panel-2);border:1px solid var(--rule-2);
+  padding:9px 11px;font-family:var(--mono);font-size:.7rem;line-height:1.55;
+  color:var(--chalk);box-shadow:var(--shadow);opacity:0;transition:opacity .1s;
+  max-width:260px;
 }
-.tip b{color:var(--accent);font-weight:600}
+.tip b{color:var(--bulb);font-weight:600}
 
-table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:.76rem}
-th,td{text-align:right;padding:5px 9px;border-bottom:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:.74rem}
+th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--rule)}
 th:first-child,td:first-child{text-align:left}
-th{color:var(--ink-3);font-weight:500;letter-spacing:.07em;text-transform:uppercase;font-size:.64rem}
-tr.me td{background:var(--accent-soft);font-weight:600}
+th{
+  color:var(--faint);font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;font-size:.6rem;
+}
+tbody tr:hover td{background:var(--panel-2)}
+tr.me td{background:var(--led-soft);color:var(--chalk);font-weight:600}
+tr.me td:first-child{box-shadow:inset 2px 0 0 var(--led)}
 
 .cell{cursor:pointer}
-.sel-outline{fill:none;stroke:var(--ink);stroke-width:2;pointer-events:none}
-.callout{
-  border-left:2px solid var(--accent);padding:2px 0 2px 16px;
-  color:var(--ink-2);font-size:.95rem;max-width:66ch;
-}
-footer{padding:44px 0 64px;color:var(--ink-3);font-size:.83rem}
-footer p{margin-bottom:9px;max-width:76ch}
+.sel-outline{fill:none;stroke:var(--led);stroke-width:2;pointer-events:none}
+
+footer{padding-block:46px 72px;color:var(--dim);font-size:.8rem;font-family:var(--sans)}
+footer p{margin-bottom:11px;max-width:78ch;line-height:1.7}
+footer b{color:var(--chalk);font-weight:500}
+
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:640px){
+  .masthead{padding-block:42px 26px}
+  .stat .v{font-size:2.1rem}
+}
+
 </style>
 
 <header class="top"><div class="wrap masthead">
@@ -159,7 +258,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">The blind spot</span>
+    <span class="eyebrow">The blind spot<b id="nBlind"></b></span>
     <h2>One xBA value, the entire width of the field</h2>
     <p class="note">
       Every ball in a cell left the bat at nearly the same speed and angle, so xBA assigns
@@ -197,7 +296,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">The gradient</span>
+    <span class="eyebrow">The gradient<b id="nGradient"></b></span>
     <h2>Where the outs live</h2>
     <p class="note">
       Every batted ball placed where it came down, binned by direction and distance,
@@ -228,7 +327,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">The physics</span>
+    <span class="eyebrow">The physics<b id="nPhysics"></b></span>
     <h2>Carry: the part defense cannot explain</h2>
     <p class="note">
       Each ball hit in the air against the league&rsquo;s median distance for its exact exit
@@ -244,7 +343,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">What actually goes missing</span>
+    <span class="eyebrow">What actually goes missing<b id="nMissing"></b></span>
     <h2>It does not eat home runs</h2>
     <p class="note">
       Each hit type as a share of balls in play, against the league&rsquo;s share of the
@@ -271,7 +370,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">The strikeouts</span>
+    <span class="eyebrow">The strikeouts<b id="nStrikeouts"></b></span>
     <h2>Contact never made</h2>
     <p class="note">
       Personnel held fixed: each park scored once by following the home club&rsquo;s hitters
@@ -287,7 +386,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section>
   <div class="sec-head">
-    <span class="eyebrow">The ledger</span>
+    <span class="eyebrow">The ledger<b id="nLedger"></b></span>
     <h2>Every park, measured against its own contact quality</h2>
     <p class="note">
       Measured against the league rather than zero &mdash; xBA runs slightly under reality on
@@ -310,7 +409,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section style="border-bottom:none">
   <div class="sec-head">
-    <span class="eyebrow">Season by season</span>
+    <span class="eyebrow">Season by season<b id="nSeason"></b></span>
     <h2 id="seasonTitle">Is it stable?</h2>
     <p class="note">A park effect that flips sign every year is noise. One that holds is a building.</p>
   </div>
@@ -322,7 +421,7 @@ footer p{margin-bottom:9px;max-width:76ch}
 
 <section class="wrap" style="border-bottom:none">
   <div class="sec-head">
-    <span class="eyebrow">Precision</span>
+    <span class="eyebrow">Precision<b id="nPrecision"></b></span>
     <h2>What the sample will and will not support</h2>
     <p class="note">
       Every chart above is an estimate, and they are not equally solid. Batting average is
@@ -414,7 +513,10 @@ const nameOf = {}; summary.forEach(d=>nameOf[d.park]=d.name);
 const byPark = {}; summary.forEach(d=>byPark[d.park]=d);
 
 /* ---------- palette ---------- */
-const XBA_RAMP = ["#12232B","#1B4E5B","#2C8C86","#69C2A0","#CFE08D","#F2C14E"];
+/* An illumination ramp: unlit board through to a fully lit bulb. The same idea the
+   page is built on, doing sequential-scale duty. Lightness rises monotonically so it
+   still reads correctly in greyscale. */
+const XBA_RAMP = ["#101817","#1C3A3A","#2E6E5E","#6E9E52","#C4B03C","#FFB627"];
 const xbaColor = d3.scaleSequential(d3.interpolateRgbBasis(XBA_RAMP)).domain([0,1]);
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function gapRamp(){
@@ -919,7 +1021,7 @@ function renderCarry(){
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
     .attr("font-size",9.5).attr("font-weight",d=>d.park===PARK?700:400)
-    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.short||d.name);
   svg.append("g").selectAll("text.v").data(rows).join("text")
     .attr("x",d=>d.carry_ft>=0?x(d.carry_ft)+5:x(d.carry_ft)-5)
     .attr("y",d=>y(d.park)+y.bandwidth()/2+3.5)
@@ -1069,7 +1171,7 @@ function renderK(){
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
     .attr("font-size",9.5).attr("font-weight",d=>d.park===PARK?700:400)
-    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.short||d.name);
   svg.append("g").selectAll("text.v").data(rows).join("text")
     .attr("x",d=>d.k_pf>=1?x(d.k_pf)+5:x(d.k_pf)-5)
     .attr("y",d=>y(d.park)+y.bandwidth()/2+3.5)
@@ -1089,7 +1191,7 @@ function renderK(){
 function renderRank(){
   const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
   const rows=summary.slice().sort((a,b)=>rel(a)-rel(b));
-  const M={t:10,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
+  const M={t:28,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#rankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const ext=d3.max(rows,d=>Math.abs(rel(d)));
@@ -1129,10 +1231,10 @@ function renderRank(){
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
     .attr("font-size",9).attr("font-weight",d=>d.park===PARK?700:400)
-    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.name);
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.short||d.name);
   svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
     .attr("stroke",cssVar("--ink-3"));
-  svg.append("text").attr("x",x(0)).attr("y",M.t+9).attr("text-anchor","middle")
+  svg.append("text").attr("x",x(0)).attr("y",M.t-9).attr("text-anchor","middle")
     .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em")
     .text("LEAGUE AVERAGE");
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
@@ -1311,11 +1413,32 @@ function renderPower(){
     "</b> parks clear their own error bar — the rest are not neutral, they are unmeasured.");
 }
 
+/* Each section eyebrow states the sample that section rests on. The number is the
+   structural device -- it changes with the park you select, and it is the honest
+   answer to "how much is behind this?" before you read a single chart. */
+function renderSectionCounts(){
+  const s=byPark[PARK]||{};
+  const cell=lgSpray.filter(d=>d.ev_band===BAND.ev_band&&d.la_band===BAND.la_band);
+  const fm=fieldMap.filter(d=>d.park===PARK);
+  const set=(id,txt)=>d3.select("#"+id).text(txt?" / "+txt:"");
+  set("nBlind", fi(d3.sum(cell,d=>d.n))+" balls in this cell");
+  set("nGradient", fi(d3.sum(fm,d=>d.n))+" placed, median "+
+      (fm.length?fi(Math.round(d3.median(fm,d=>d.n))):0)+" per bin");
+  set("nPhysics", s.carry_n?fi(s.carry_n)+" hit in the air":"");
+  set("nMissing", s.bip?fi(s.bip)+" balls in play":"");
+  set("nStrikeouts", s.k_pa?fi(s.k_pa)+" plate appearances":"");
+  set("nLedger", fi(d3.sum(summary,d=>d.bip))+" across "+summary.length+" parks");
+  const ps=parkSeason.filter(d=>d.park===PARK);
+  set("nSeason", ps.length?ps.length+" seasons, "+
+      fi(Math.round(d3.mean(ps,d=>d.bip)))+" balls each":"");
+  set("nPrecision", "95% intervals");
+}
+
 function renderAll(){
   gapColor=d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
   renderReadout(); renderGrid(); renderSpray(); renderField();
   renderCarry(); renderMix(); renderBtype(); renderK(); renderRank(); renderSeason();
-  renderCellFan(); renderPrecision(); renderPower();
+  renderCellFan(); renderPrecision(); renderPower(); renderSectionCounts();
   // Sample size stated on the panel, not only in the tooltip.
   const s0=byPark[PARK];
   d3.select("#nCarry").html(encodingKey("balls hit in the air"));

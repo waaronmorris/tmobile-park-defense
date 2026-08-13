@@ -43,5 +43,22 @@ def park_id(home_team: str, season: int) -> str:
     return team
 
 
+# Row charts label thirty-odd bars in a fixed gutter, and four of these names are long
+# enough to run off the left edge at that type size. The full name still appears in the
+# table and every tooltip.
+SHORT_NAMES = {
+    "BAL": "Camden Yards",
+    "STEIN": "Steinbrenner Field",
+    "SUTTER": "Sutter Health Park",
+    "CIN": "Great American",
+    "MIL": "American Family",
+    "PHI": "Citizens Bank Park",
+}
+
+
 def park_name(pid: str) -> str:
     return PARK_NAMES.get(pid, pid)
+
+
+def park_short(pid: str) -> str:
+    return SHORT_NAMES.get(pid, PARK_NAMES.get(pid, pid))
