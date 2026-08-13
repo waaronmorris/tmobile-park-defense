@@ -124,7 +124,9 @@ def wrap_document(body: str) -> str:
 <meta property="og:title" content="{title_text}">
 <meta property="og:description" content="{desc}">
 <meta property="og:type" content="article">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<!-- Absolute: the same file is served from morris-labs.dev/viz/... and from a GitHub
+     Pages project path, where a root-relative icon resolves to the user page and 404s. -->
+<link rel="icon" href="https://morris-labs.dev/favicon.svg" type="image/svg+xml">
 {style_text}
 <style>{SITE_CSS}</style>
 </head>
