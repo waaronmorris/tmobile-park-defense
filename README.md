@@ -216,7 +216,8 @@ viz/
   template.html      the page (placeholders for d3 and data)
   data/              aggregates, committed, so a clone can rebuild
   vendor/d3.min.js   inlined at build time
-docs/index.html      the built application, ~1.1 MB, served by GitHub Pages
+docs/index.html      the built application, ~1.7 MB, served by GitHub Pages
+viz/fonts/           Oswald + IBM Plex, inlined as data URIs at build time
 data/raw/            233 MB of parquet chunks, gitignored, resumable
 ```
 

@@ -7,7 +7,7 @@ no stylesheet, no script, no font, no data fetched at runtime -- so it can be dr
 any static host and works offline.
 
     build_viz.py                      -> docs/index.html   (GitHub Pages)
-    build_viz.py --out <path>         -> anywhere else     (e.g. the morris-labs copy)
+    build_viz.py --out <path>         -> anywhere else
 
 Records are packed columnar (one array per field, plus a shared string table) because the
 row-of-objects form repeats every key thousands of times and roughly triples the payload.
@@ -108,6 +108,22 @@ FONTS = [
 ]
 
 
+def favicon_uri() -> str:
+    """
+    Inline the site mark as a data URI.
+
+    It used to be pulled from morris-labs.dev, which was the page's only remaining
+    network request -- and a cross-domain one now that the app is served from GitHub
+    Pages. A root-relative path is not an option either: under a project path it
+    resolves against the user page and 404s.
+    """
+    p = ROOT / "viz" / "favicon.svg"
+    if not p.exists():
+        return ""
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    return f"data:image/svg+xml;base64,{b64}"
+
+
 def font_faces() -> str:
     """
     Inline the two faces as data URIs.
@@ -142,6 +158,7 @@ def wrap_document(body: str) -> str:
     style_text = style.group(0) if style else ""
     body = body.replace(style_text, "", 1) if style else body
 
+    favicon = favicon_uri()
     desc = ("Why T-Mobile Park suppresses offense: xBA is blind to spray angle and carry, "
             "measured across 700,000 Statcast batted balls.")
     return f"""<!doctype html>
@@ -154,9 +171,7 @@ def wrap_document(body: str) -> str:
 <meta property="og:title" content="{title_text}">
 <meta property="og:description" content="{desc}">
 <meta property="og:type" content="article">
-<!-- Absolute: the same file is served from morris-labs.dev/viz/... and from a GitHub
-     Pages project path, where a root-relative icon resolves to the user page and 404s. -->
-<link rel="icon" href="https://morris-labs.dev/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{favicon}">
 {style_text}
 <style>{SITE_CSS}</style>
 </head>
