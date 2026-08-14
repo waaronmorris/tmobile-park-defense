@@ -62,12 +62,12 @@ average wall height 7.6 ft vs an MLB mean of 9.6) that the 2013 move-in offsets 
 The damage lands on balls hit in the air that need to find grass, which is exactly where the
 spray-angle gradient below does its work.
 
-### What that mix is worth
+### How much of it is the building
 
-Rate ratios say triples are down by half. They cannot say what half a park's triples is
-worth against half its singles, because BA scores every hit alike. wOBA does not: a triple
-weighs 1.6 against a single's 0.9 and a home run's 2.0. Since mean wOBA *is* a weighted sum
-of outcome rates, the shortfall splits exactly (residual 2e-5):
+Rate ratios say which hit types a park removes. They cannot say what the removal cost,
+because BA scores every hit alike — a triple weighs 1.6 against a single's 0.9 and a home
+run's 2.0. Since mean wOBA *is* a weighted sum of outcome rates, the shortfall splits
+exactly (residual 1e-4):
 
 | Outcome | Rate vs league | Weight | wOBA cost | Share of the total |
 |---|---|---|---|---|
@@ -80,11 +80,21 @@ of outcome rates, the shortfall splits exactly (residual 2e-5):
 | *of which contact quality (xwOBA)* | | | *−.0035* | 18% |
 | ***left over — the park*** | | | **−.0155** | 82% |
 
-Triples are 0.54% of league contact and 22% of the loss. Nothing else on the board returns
-that much per ball. Home runs run the other way and give back a quarter of it, which is why
-the park reads as merely below average on wOBA and worst in MLB on batting average.
+The reading, in order of size:
 
-### Why the triples go
+- **Four fifths of it is the building.** Contact quality accounts for −.0035 of the −.0190;
+  the −.0155 left over is what xwOBA cannot see. This is the wOBA restatement of the whole
+  argument, and it is the number that belongs in the headline table.
+- **The mass is singles and doubles** — 96% of the total between them. Whatever the park
+  does, it does most of it to ordinary balls in play that need to find grass.
+- **Home runs run the other way**, giving back a quarter. That offset is why Seattle reads
+  worst in MLB on batting average but only 2nd on wOBA: BA counts a home run as one hit
+  like any other, wOBA pays 2.0 for it.
+- **Triples are the concentrated one**, not the big one — 0.54% of league contact carrying
+  22% of the loss. Nothing else on the board returns that much per ball, which is what makes
+  the mechanism worth chasing even though the mass sits elsewhere.
+
+### The triples, specifically
 
 62 triples in six seasons against 121 at the league rate — the lowest of any park with a
 full span. Two things do it, at opposite ends of the field.

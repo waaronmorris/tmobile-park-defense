@@ -379,13 +379,15 @@ footer b{color:var(--chalk);font-weight:500}
 <section>
   <div class="sec-head">
     <span class="eyebrow">The cost<b id="nCost"></b></span>
-    <h2>What half a park&rsquo;s triples is worth</h2>
+    <h2>How much of it is the building</h2>
     <p class="note">
-      The chart above counts hit types. This one prices them. wOBA weights a triple at 1.6
-      against a single&rsquo;s 0.9, so an identical rate loss is worth nearly twice as much
-      when it lands on triples &mdash; and a park that gives home runs back is credited 2.0
-      apiece for them. Left is every park on wOBA &minus; xwOBA; right is the selected
-      park&rsquo;s shortfall, split by which outcome went missing.
+      The chart above counts hit types. This one prices them, which asks a different
+      question: not what a park removes but what it cost. Because mean wOBA <i>is</i> a
+      weighted sum of outcome rates, the shortfall splits exactly &mdash; every bar is
+      that outcome&rsquo;s own contribution, and they add to the total underneath.
+      Splitting the same total the other way separates the part contact quality accounts
+      for from the part it does not, and the second is the park. Left is every ballpark on
+      wOBA &minus; xwOBA; right is the selected one, taken apart.
     </p>
   </div>
   <div class="split">
@@ -1423,17 +1425,58 @@ function renderWdecomp(){
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
 
-  // The caption carries the comparison the bars cannot: an outcome's share of the total
-  // against the share of contact it came from. That ratio is the point of the panel.
-  const tri=rows.find(d=>d.event==="triple");
-  d3.select("#wdecompNote").html(tri && total<0
-    ? "Triples are "+d3.format(".2%")(tri.lg_rate)+" of league contact and "+
-      d3.format(".0%")(tri.contrib/total)+" of this park&rsquo;s wOBA shortfall &mdash; "+
-      fi(tri.k)+" hit here against "+fi(Math.round(tri.lg_rate*tri.n))+
-      " at the league rate. Contact quality accounts for "+fp(s.xwoba_rel||0)+" of the "+
-      fp(total)+" total; the "+fp(s.wgap_rel||0)+" left over is the building."
-    : "Bars sum to this park&rsquo;s wOBA against the league. The rows below the rule "+
-      "split that same total into the part xwOBA can see and the part it cannot.");
+  // The caption reads the panel in the order the panel argues it: how much of the total
+  // the building owns, then where the mass of it sits, then anything running against the
+  // grain, and only last the outcome that punches hardest for its frequency. All four are
+  // derived, so this reads correctly for a park that gains as well as one that loses --
+  // an earlier version hardcoded triples and had nothing to say about Coors.
+  // A share of the total is only meaningful when the terms do not largely cancel. At a
+  // park whose outcomes offset to nearly zero -- Yankee Stadium is the case -- dividing
+  // by that total produces "5400% of it", so shares are dropped there and everything is
+  // stated in wOBA points instead. Threshold: the total must be at least half the gross.
+  const gross=d3.sum(rows,d=>Math.abs(d.contrib));
+  const shareable=Math.abs(total)>=0.5*gross;
+  const share=v=>shareable?" ("+d3.format(".0%")(Math.abs(v/total))+" of it)":"";
+  const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
+  const names=a=>{
+    const n=a.map(d=>WD_LABEL[d.event].toLowerCase());
+    return n.length<2?n.join(""):n.slice(0,-1).join(", ")+" and "+n[n.length-1];
+  };
+  const word=total<0?"shortfall":"surplus";
+
+  const by=rows.slice().sort((a,b)=>Math.abs(b.contrib)-Math.abs(a.contrib));
+  const mass=by.filter(d=>Math.sign(d.contrib)===Math.sign(total)).slice(0,2);
+  const against=by.filter(d=>Math.sign(d.contrib)===-Math.sign(total)&&Math.abs(d.contrib)>0.001);
+  // wOBA points per unit of league frequency: which outcome returns most per ball.
+  const dense=by.slice().sort((a,b)=>
+    Math.abs(b.contrib)/(b.lg_rate||1)-Math.abs(a.contrib)/(a.lg_rate||1))[0];
+
+  const parts=[];
+  if(s.wgap_rel!=null&&s.xwoba_rel!=null)
+    // fp() renders a total this small as "−0.000", which reads as a formatting fault
+    // rather than the real finding: the outcomes are large and they offset.
+    parts.push("The outcome bars "+(Math.abs(total)<0.001
+        ? "offset to nearly zero" : "total "+fp(total))+
+      ". Contact quality accounts for "+fp(s.xwoba_rel)+share(s.xwoba_rel)+"; the "+
+      fp(s.wgap_rel)+" left over is the building.");
+  if(mass.length)
+    parts.push("The mass of it is "+names(mass)+", worth "+fp(d3.sum(mass,d=>d.contrib))+
+      share(d3.sum(mass,d=>d.contrib))+" between them.");
+  if(against.length)
+    parts.push(cap(names(against))+" run the other way, giving back "+
+      fp(d3.sum(against,d=>d.contrib))+share(d3.sum(against,d=>d.contrib))+".");
+  if(dense&&dense!==mass[0])
+    parts.push(WD_LABEL[dense.event]+" are the concentrated one: "+
+      d3.format(".2%")(dense.lg_rate)+" of league contact carrying "+fp(dense.contrib)+
+      share(dense.contrib)+
+      // At most parks this outcome moves with the total; where it moves against it,
+      // calling it part of "the shortfall" would state the opposite of its sign.
+      (Math.sign(dense.contrib)===Math.sign(total)?" of the "+word:", against the "+word)+
+      ", "+fi(dense.k)+" here against "+
+      fi(Math.round(dense.lg_rate*dense.n))+" at the league rate.");
+  d3.select("#wdecompNote").html(parts.join(" ") ||
+    "Bars sum to this park&rsquo;s wOBA against the league. The rows below the rule "+
+    "split that same total into the part xwOBA can see and the part it cannot.");
 }
 
 /* ---------- strikeout park factor ---------- */
