@@ -209,6 +209,12 @@ select:focus-visible,button:focus-visible,.cell:focus-visible,a:focus-visible{
 .tip b{color:var(--bulb);font-weight:600}
 
 table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:.74rem}
+/* Every column but the first holds a number or a short tag, and a number that wraps
+   ("±" on one line, ".005" on the next) is unreadable. Only the label column wraps. */
+td,th{white-space:nowrap}
+td:first-child,th:first-child{white-space:normal}
+#precTable td:first-child{min-width:19rem}
+#precTable .sub{display:block;opacity:.6;font-size:.92em;margin-top:2px}
 th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--rule)}
 th:first-child,td:first-child{text-align:left}
 th{
@@ -432,19 +438,21 @@ footer b{color:var(--chalk);font-weight:500}
       of its 95% interval.
     </p>
   </div>
-  <div class="split">
-    <div class="panel">
-      <div class="panel-head"><h3 id="precTitle">Every estimate, with its interval</h3></div>
-      <div class="chart-scroll"><table id="precTable"></table></div>
-      <p class="note" style="margin-top:10px">
-        The last column is the estimate divided by its own margin of error. Below 1.0 the
-        interval spans zero and the measurement cannot tell you the direction.
-      </p>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>What it takes to see an effect</h3></div>
-      <div class="chart-scroll"><svg id="powerChart"></svg></div>
-      <p class="note" id="powerNote" style="margin-top:10px"></p>
+  <div class="panel">
+    <div class="panel-head"><h3 id="precTitle">Every estimate, with its interval</h3>
+      <span class="legend">the last column is the estimate divided by its own margin of error</span></div>
+    <div class="chart-scroll"><table id="precTable"></table></div>
+    <p class="note" style="margin-top:12px">
+      Below 1.0 in that column the interval spans zero and the measurement cannot tell you
+      the direction, only that something is there.
+    </p>
+  </div>
+
+  <div class="panel" style="margin-top:20px">
+    <div class="panel-head"><h3>What it takes to see an effect</h3></div>
+    <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+      <div class="chart-scroll" style="flex:1 1 460px;min-width:0"><svg id="powerChart"></svg></div>
+      <p class="note" id="powerNote" style="flex:1 1 300px;min-width:0"></p>
     </div>
   </div>
 </section>
@@ -769,7 +777,7 @@ function selectFromGrid(d){
 
 /* ---------- spray curve: the centerpiece ---------- */
 function renderSpray(){
-  const M={t:16,r:16,b:62,l:44}, W=520, H=390;
+  const M={t:16,r:16,b:62,l:60}, W=536, H=390;
   const svg=d3.select("#sprayChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
 
@@ -1365,7 +1373,7 @@ function renderRank(){
 function renderSeason(){
   const rows=parkSeason.filter(d=>d.park===PARK).sort((a,b)=>a.season-b.season);
   d3.select("#seasonTitle").text(nameOf[PARK]+", season by season");
-  const M={t:14,r:20,b:56,l:56}, W=1040, H=252;
+  const M={t:14,r:20,b:56,l:74}, W=1040, H=252;
   const svg=d3.select("#seasonChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   if(!rows.length) return;
@@ -1451,7 +1459,7 @@ function renderPrecision(){
     "<th>95%</th><th title='estimate divided by its margin of error'>÷ MoE</th></tr></thead><tbody></tbody>");
   t.select("tbody").selectAll("tr").data(L).join("tr")
     .attr("class",d=>d.ratio!=null&&d.ratio<1?"me":null)
-    .html(d=>"<td>"+d.label+"<br><span style='opacity:.6;font-size:.92em'>"+d.note+"</span></td>"+
+    .html(d=>"<td>"+d.label+"<span class='sub'>"+d.note+"</span></td>"+
       "<td style='opacity:.7'>"+d.chart+"</td><td>"+fi(d.n)+"</td>"+
       "<td>"+fmtEst(d)+"</td><td>"+fmtMoe(d)+"</td>"+
       "<td>"+(d.ratio==null?"—":d3.format(".1f")(d.ratio)+"×")+"</td>");
@@ -1460,7 +1468,7 @@ function renderPrecision(){
 function renderPower(){
   const C=PRECISION.curve||[];
   if(!C.length) return;
-  const M={t:16,r:22,b:42,l:56}, W=520, H=300;
+  const M={t:16,r:22,b:42,l:74}, W=538, H=300;
   const svg=d3.select("#powerChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
   const x=d3.scaleLog().domain([600,d3.max(C,d=>d.n)*1.2]).range([M.l,W-M.r]);
