@@ -40,6 +40,48 @@ def add_ba_ci(df, ba="ba", n="n"):
     df["moe"] = moe_for_proportion(df[ba], df[n]).round(4)
     return df
 
+
+# Both metrics are read off the same bins so the page can switch between them, but they
+# do not share an error model: batting average is a proportion and takes a Wilson
+# interval, while wOBA is a mean of weighted outcomes and takes the ordinary standard
+# error. Using Wilson on wOBA would be wrong twice over -- it is not bounded in [0,1],
+# and its per-ball variance is not p(1-p).
+METRIC_AGG = {
+    "n": ("is_hit", "count"), "ba": ("is_hit", "mean"), "xba": ("xba", "mean"),
+    "wn": ("woba", "count"), "woba": ("woba", "mean"), "xwoba": ("xwoba", "mean"),
+    "wsem": ("woba", "sem"),
+}
+
+
+def add_woba_ci(df):
+    """Attach the wOBA margin of error to a table already carrying wsem."""
+    df["wmoe"] = (Z95 * df["wsem"]).round(4)
+    return df.drop(columns=["wsem"])
+
+
+def binning_frame(df, scale):
+    """
+    One frame for every binned chart, carrying both metrics on their own valid rows.
+
+    The two populations differ by sacrifice flies: they have an xwOBA and count in the
+    wOBA denominator, but carry no xBA and are not at-bats. Masking is_hit to null
+    wherever xBA is null makes a single groupby produce each metric over exactly its own
+    rows -- pandas skips nulls per column -- so the bins line up for a toggle without
+    either metric borrowing the other's population. n and wn travel separately for the
+    same reason.
+    """
+    df = df.copy()
+    df["is_hit"] = df["is_hit"].where(df["xba"].notna())
+    # Same masking on the other side: a row outside the wOBA denominator carries a
+    # woba_value that must not reach a mean, and null is how the groupby is told to skip it.
+    in_woba = (df["woba_denom"] == 1) & df["xwoba"].notna()
+    df["woba"] = df["woba"].where(in_woba)
+    df["xwoba"] = df["xwoba"].where(in_woba)
+    df["gap_row"] = df["is_hit"] - df["xba"]
+    df["wgap_row"] = df["woba"] - df["xwoba"]
+    df["hc_dist"] = df["hc_r"] * scale
+    return df
+
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "viz" / "data"
@@ -479,15 +521,17 @@ def main():
     ps = ps.merge(carry_season, on=["park", "season"], how="left")
     ps = ps.merge(wgap_season, on=["park", "season"], how="left")
 
-    # ---------- EV/LA grid: the xBA model surface, and each park's actual ----------
-    bip["ev_bin"] = (bip["ev"] // 2.5) * 2.5
-    bip["la_bin"] = (bip["la"] // 2.5) * 2.5
-    grid = bip[bip["ev"].between(40, 120) & bip["la"].between(-30, 60)]
-    lg_grid = grid.groupby(["ev_bin", "la_bin"]).agg(
-        n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index()
-    pk_grid = grid.groupby(["park", "ev_bin", "la_bin"]).agg(
-        n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean")).reset_index()
-    pk_grid = pk_grid[pk_grid["n"] >= 15]
+    # ---------- EV/LA grid: the model surface, and each park's actual ----------
+    # From here down every table carries both metrics on the same bins, so the page can
+    # switch xBA <-> xwOBA without changing which balls it is looking at.
+    binf = binning_frame(allbip, scale)
+    binf["ev_bin"] = (binf["ev"] // 2.5) * 2.5
+    binf["la_bin"] = (binf["la"] // 2.5) * 2.5
+    grid = binf[binf["ev"].between(40, 120) & binf["la"].between(-30, 60)]
+    lg_grid = grid.groupby(["ev_bin", "la_bin"]).agg(**METRIC_AGG).reset_index()
+    lg_grid = lg_grid.drop(columns=["wsem"])
+    pk_grid = grid.groupby(["park", "ev_bin", "la_bin"]).agg(**METRIC_AGG).reset_index()
+    pk_grid = pk_grid[pk_grid["n"] >= 15].drop(columns=["wsem"])
 
     # ---------- the point of the whole exercise ----------
     # One xBA value hides a big spray-angle gradient. Within EV/LA cells, show how the
@@ -503,9 +547,8 @@ def main():
     # distance is close to determined by physics, so this lets the same numbers be drawn
     # on field geometry rather than on an abstract axis.
     lg_spray = (sp.groupby(["ev_band", "la_band", "spray_bin"], observed=True)
-                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
-                     dist=("hc_dist", "median")).reset_index())
-    lg_spray = add_ba_ci(lg_spray[lg_spray["n"] >= 30].copy())
+                .agg(**METRIC_AGG, dist=("hc_dist", "median")).reset_index())
+    lg_spray = add_woba_ci(add_ba_ci(lg_spray[lg_spray["n"] >= 30].copy()))
     lg_spray["dist"] = lg_spray["dist"].round(1)
     # A single park holds ~1/30th of the league's contact, so the per-park curve needs
     # wider bins. Widen the SPRAY bins only, and keep the exact same contact bands as the
@@ -519,15 +562,13 @@ def main():
     # inside the cell.
     sp["spray_c"] = (sp["spray"] // 7.5) * 7.5
     pk_spray = (sp.groupby(["park", "ev_band", "la_band", "spray_c"], observed=True)
-                .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
-                     dist=("hc_dist", "median")).reset_index())
-    pk_spray = add_ba_ci(pk_spray[pk_spray["n"] >= 15].copy())
+                .agg(**METRIC_AGG, dist=("hc_dist", "median")).reset_index())
+    pk_spray = add_woba_ci(add_ba_ci(pk_spray[pk_spray["n"] >= 15].copy()))
     pk_spray["dist"] = pk_spray["dist"].round(1)
     # League on the park's own spray binning, for a like-for-like reference line.
     lg_spray_c = (sp.groupby(["ev_band", "la_band", "spray_c"], observed=True)
-                  .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
-                       dist=("hc_dist", "median")).reset_index())
-    lg_spray_c = add_ba_ci(lg_spray_c[lg_spray_c["n"] >= 30].copy())
+                  .agg(**METRIC_AGG, dist=("hc_dist", "median")).reset_index())
+    lg_spray_c = add_woba_ci(add_ba_ci(lg_spray_c[lg_spray_c["n"] >= 30].copy()))
     lg_spray_c["dist"] = lg_spray_c["dist"].round(1)
 
     # ---------- how the thirty parks spread at each spray angle ----------
@@ -536,35 +577,40 @@ def main():
     # These are the percentiles ACROSS parks in each bin, so the band is the league's own
     # distribution and its asymmetry about the median is the skew, drawn rather than
     # asserted.
+    # Both metrics get their own percentile band. The spread across parks is the whole
+    # point of the strip, and it is not the same shape on the two scales: wOBA separates
+    # the parks further down the lines, where the hit that goes missing is an extra-base
+    # hit rather than a single.
     dist_rows = []
     for (evb, lab, spc), g in pk_spray.groupby(["ev_band", "la_band", "spray_c"], observed=True):
         if len(g) < 12:            # too few parks clear the per-bin floor to describe a spread
             continue
-        q = g["ba"].quantile([0.10, 0.25, 0.50, 0.75, 0.90])
-        dist_rows.append({
-            "ev_band": evb, "la_band": lab, "spray_c": spc, "parks": int(len(g)),
-            "p10": round(float(q[0.10]), 4), "p25": round(float(q[0.25]), 4),
-            "p50": round(float(q[0.50]), 4), "p75": round(float(q[0.75]), 4),
-            "p90": round(float(q[0.90]), 4),
-        })
+        row = {"ev_band": evb, "la_band": lab, "spray_c": spc, "parks": int(len(g))}
+        for col, pre in (("ba", ""), ("woba", "w")):
+            q = g[col].quantile([0.10, 0.25, 0.50, 0.75, 0.90])
+            for p in (10, 25, 50, 75, 90):
+                row[f"{pre}p{p}"] = round(float(q[p / 100]), 4)
+        dist_rows.append(row)
     spray_dist = pd.DataFrame(dist_rows)
     if len(spray_dist):
         # Positive = the upper half of the parks is more spread out than the lower half.
-        spray_dist["skew"] = ((spray_dist["p90"] - spray_dist["p50"])
-                              - (spray_dist["p50"] - spray_dist["p10"])).round(4)
+        for pre in ("", "w"):
+            spray_dist[pre + "skew"] = (
+                (spray_dist[pre + "p90"] - spray_dist[pre + "p50"])
+                - (spray_dist[pre + "p50"] - spray_dist[pre + "p10"])).round(4)
 
     # ---------- field map: gap by landing location ----------
-    fm = bip[bip["spray"].notna() & bip["hc_dist"].notna()].copy()
-    fm["sb"] = (fm["spray"] // 4) * 4
-    fm["db"] = (fm["hc_dist"] // 20) * 20
+    fm = binf[binf["spray"].notna() & binf["hc_dist"].notna()]
+    fm = fm.assign(sb=(fm["spray"] // 4) * 4, db=(fm["hc_dist"] // 20) * 20)
     fmap = (fm.groupby(["park", "sb", "db"])
-            .agg(n=("is_hit", "size"), ba=("is_hit", "mean"), xba=("xba", "mean"),
-                 gap_sem=("gap_row", "sem")).reset_index())
+            .agg(**METRIC_AGG, gap_sem=("gap_row", "sem"),
+                 wgap_sem=("wgap_row", "sem")).reset_index())
     # These are the thinnest cells anywhere in the project -- a single park, a 4-degree
     # wedge, a 20-foot ring. The floor is raised to 25 and the residual standard error
     # travels with each cell so the map can fade what it cannot support.
-    fmap = fmap[fmap["n"] >= 25].copy()
+    fmap = fmap[fmap["n"] >= 25].drop(columns=["wsem"])
     fmap["gap_sem"] = fmap["gap_sem"].round(4)
+    fmap["wgap_sem"] = fmap["wgap_sem"].round(4)
 
     # ---------- outcome mix ----------
     # Which hit types a park actually removes. A park that shortens fly balls but has short

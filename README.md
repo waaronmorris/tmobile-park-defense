@@ -125,16 +125,26 @@ Take the 9,025 balls hit 95–100 mph at 20–25°. Statcast assigns them all es
 **.302**, across the entire field — it holds to within four points in every direction.
 The actual batting average within that one cell, by 5° bin:
 
-| Direction | Actual BA | Balls |
-|---|---|---|
-| Left-field line, −50° to −45° | **.990** | 104 |
-| Left-centre gap, −20° to −15° | .488 | 508 |
-| Straightaway centre, 0° to +5° | **.021** | 569 |
-| Right-centre gap, +15° to +20° | .445 | 548 |
-| Right-field line, +45° to +50° | **.971** | 140 |
+| Direction | Actual BA | Actual wOBA | Balls |
+|---|---|---|---|
+| Left-field line, −50° to −45° | **.990** | **1.340** | 104 |
+| Left-centre gap, −20° to −15° | .488 | .624 | 508 |
+| Straightaway centre, 0° to +5° | **.021** | **.027** | 569 |
+| Right-centre gap, +15° to +20° | .445 | .561 | 548 |
+| Right-field line, +45° to +50° | **.971** | **1.308** | 140 |
 
 A spread of **.969** in outcome that the model treats as identical contact. That gradient is
 what a ballpark's geometry acts on, and it is invisible to xBA by construction.
+
+**The same blind spot is wider on xwOBA**, which is the case for looking at it. Across the
+whole field xwOBA holds to within **.038** while what actually happened spans **1.313** — a
+ball down the line is a double or a triple, not merely a hit, so direction is worth more in
+run value than it is in batting average. Both models are blind to it in the same way and to
+the same degree; wOBA just prices the miss higher.
+
+The application carries a **model switch** — every chart that reads an expected stat can be
+flipped between xBA and xwOBA. Both readings come from identical bins over identical balls,
+so switching changes the question being asked and nothing about the sample answering it.
 
 ## How much of this the sample supports
 
@@ -207,6 +217,18 @@ score them, as a rate or as a wOBA cost.
 - **Hitter-adjusted gap** charges each batted ball against that batter's own record in every
   *other* park, so a lineup that chronically underperforms xBA is not mistaken for a park.
   This is computed on the xBA side only; the wOBA charts are unadjusted for hitter mix.
+- **Both models over one set of bins.** Every binned table — the EV/LA grid, the spray
+  curves, the field map — carries both readings of the same bins, which is what lets the
+  page switch models without changing which balls it is describing. They are not read off
+  the same rows, though, and must not be: a sacrifice fly has an xwOBA and belongs in the
+  wOBA denominator, but has no xBA and is not an at-bat. Masking each metric to null
+  outside its own population lets one pass produce both, with `n` and `wn` travelling
+  separately so every chart states the sample actually behind the number it is drawing.
+- **The two scales are not interchangeable.** BA is a probability bounded at 1; wOBA is a
+  run value bounded at 2, because that is what a home run is worth, and the bins down the
+  lines really do exceed 1. Location cells swing about 1.6× as hard on wOBA — the 95th
+  percentile of |actual − expected| across field-map cells is .36 on BA against .57 on
+  wOBA — so the field fan widens its colour domain to match rather than saturating.
 - **Spray angle** is derived from the Statcast hit coordinate about home plate at
   (125.42, 198.27); negative is toward left field. Coordinates are scaled to feet by
   calibrating against `hit_distance_sc` on balls hit in the air, which gives **2.487 ft/unit**
@@ -298,7 +320,7 @@ viz/
   template.html      the page (placeholders for d3 and data)
   data/              aggregates, committed, so a clone can rebuild
   vendor/d3.min.js   inlined at build time
-docs/index.html      the built application, ~1.7 MB, served by GitHub Pages
+docs/index.html      the built application, ~2.4 MB, served by GitHub Pages
 viz/fonts/           Oswald + IBM Plex, inlined as data URIs at build time
 data/raw/            233 MB of parquet chunks, gitignored, resumable
 ```

@@ -259,6 +259,12 @@ footer b{color:var(--chalk);font-weight:500}
   <label class="ctl">Contact
     <select id="bandSel"></select>
   </label>
+  <label class="ctl">Model
+    <select id="metricSel">
+      <option value="ba">xBA &mdash; expected batting average</option>
+      <option value="woba">xwOBA &mdash; expected weighted on-base</option>
+    </select>
+  </label>
   <span class="legend" id="legendGap"></span>
 </div></div>
 
@@ -267,17 +273,18 @@ footer b{color:var(--chalk);font-weight:500}
 <section>
   <div class="sec-head">
     <span class="eyebrow">The blind spot<b id="nBlind"></b></span>
-    <h2>One xBA value, the entire width of the field</h2>
-    <p class="note">
-      Every ball in a cell left the bat at nearly the same speed and angle, so xBA assigns
-      them all nearly the same value &mdash; the flat dashed line. The solid line is what
-      happened, against spray angle.
+    <h2 id="blindTitle">One xBA value, the entire width of the field</h2>
+    <p class="note" id="blindNote">
+      Every ball in a cell left the bat at nearly the same speed and angle, so the model
+      assigns them all nearly the same value &mdash; the flat dashed line. The solid line
+      is what happened, against spray angle.
     </p>
   </div>
   <div class="split">
     <div class="panel">
-      <div class="panel-head"><h3>xBA by exit velocity and launch angle</h3>
-        <span class="legend"><span>.00</span><span class="ramp" id="rampXba"></span><span>1.00</span>
+      <div class="panel-head"><h3 id="gridTitle">xBA by exit velocity and launch angle</h3>
+        <span class="legend"><span>.00</span><span class="ramp" id="rampXba"></span>
+        <span id="rampXbaMax">1.00</span>
         <span style="margin-left:8px;opacity:.8">paler = fewer balls</span></span></div>
       <div class="chart-scroll"><svg id="gridChart"></svg></div>
       <p class="note" style="margin-top:10px">League-wide. Click any cell to drive the chart at right.</p>
@@ -314,13 +321,11 @@ footer b{color:var(--chalk);font-weight:500}
   <div class="split">
     <div class="panel">
       <div class="panel-head"><h3 id="fieldTitle">Field</h3>
-        <span class="legend"><span>&minus;.30</span><span class="ramp" id="rampField"></span><span>+.30</span>
+        <span class="legend"><span id="rampFieldLo">&minus;.30</span>
+        <span class="ramp" id="rampField"></span><span id="rampFieldHi">+.30</span>
         <span style="margin-left:8px;opacity:.8">faded = interval spans zero</span></span></div>
       <div class="chart-scroll"><svg id="fieldChart"></svg></div>
-      <p class="note" style="margin-top:10px">
-        Colour is BA&nbsp;&minus;&nbsp;xBA within each bin, on a wider scale than the park
-        totals above &mdash; single locations swing much harder than a whole ballpark does.
-      </p>
+      <p class="note" id="fieldNote" style="margin-top:10px"></p>
     </div>
     <div class="panel">
       <div class="panel-head"><h3>League average, same bins</h3></div>
@@ -438,7 +443,7 @@ footer b{color:var(--chalk);font-weight:500}
   </div>
   <div class="split">
     <div class="panel">
-      <div class="panel-head"><h3>BA &minus; xBA relative to league</h3><span class="legend" id="nRank"></span></div>
+      <div class="panel-head"><h3 id="rankTitle">BA &minus; xBA relative to league</h3><span class="legend" id="nRank"></span></div>
       <div class="chart-scroll"><svg id="rankChart"></svg></div>
     </div>
     <div class="panel">
@@ -559,6 +564,50 @@ const wobaDecomp= D.woba_decomp || [];
 
 const nameOf = {}; summary.forEach(d=>nameOf[d.park]=d.name);
 const byPark = {}; summary.forEach(d=>byPark[d.park]=d);
+
+/* ---------- the two models, behind one set of accessors ----------
+   Every binned table carries both readings of the same bins, so switching model changes
+   which columns the charts read and nothing about which balls they describe.
+
+   The two do not share a scale and must not share one. Batting average is a probability
+   and tops out at 1; wOBA is a run value and tops out at 2, because that is what a home
+   run is worth. Giving wOBA the [0,1] axis would clip the very bins the page is about --
+   down the lines, where this contact is worth more than a certain single. Nor do they
+   share an error model: BA is a proportion and carries a Wilson interval, wOBA is a mean
+   of weighted outcomes and carries an ordinary standard error. Both come from the
+   analysis rather than being recomputed here. */
+const METRICS = {
+  ba: {
+    id:"ba", exp:"xBA", act:"BA", axis:"BATTING AVERAGE", full:"batting average",
+    a:d=>d.ba, x:d=>d.xba, n:d=>d.n,
+    lo:d=>d.ba_lo, hi:d=>d.ba_hi, moe:d=>d.moe,
+    top:1, fanExt:0.30, rankLegend:"balls in play",
+    // park-level, from summary/park_season
+    rel:d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP, sem:d=>d.gap_sem, z:d=>d.gap_z,
+    cellSem:d=>d.gap_sem, seasonRel:d=>d.gap_rel, seasonMoe:d=>d.gap_moe,
+    lgGap:()=>LG_GAP,
+  },
+  woba: {
+    id:"woba", exp:"xwOBA", act:"wOBA", axis:"wOBA", full:"weighted on-base average",
+    a:d=>d.woba, x:d=>d.xwoba, n:d=>d.wn,
+    // wOBA bins carry a symmetric mean interval rather than Wilson bounds.
+    lo:d=>d.woba!=null&&d.wmoe!=null?d.woba-d.wmoe:null,
+    hi:d=>d.woba!=null&&d.wmoe!=null?d.woba+d.wmoe:null,
+    moe:d=>d.wmoe,
+    // A home run is 2.0, so that is the ceiling, and location cells swing about 1.6x as
+    // hard as they do on batting average -- measured, not guessed: the 95th percentile of
+    // |actual - expected| across field-map cells is .36 on BA and .57 on wOBA.
+    top:2, fanExt:0.50, rankLegend:"in the wOBA denominator",
+    rel:d=>d.wgap_rel, sem:d=>d.wgap_sem, z:d=>d.wgap_z,
+    cellSem:d=>d.wgap_sem, seasonRel:d=>d.wgap_rel, seasonMoe:d=>d.wgap_moe,
+    lgGap:()=>LG_WGAP,
+  },
+};
+let MET = METRICS.ba;
+/* Value formatter. Baseball drops the leading zero, but only below 1 -- and wOBA runs
+   above 1 in exactly the bins this page is about, so it cannot use ba3 unconditionally. */
+const mv = v => v==null ? "—" : (v>=1 ? f3(v) : f3(v).slice(1));
+function actColor(){ return d3.scaleSequential(d3.interpolateRgbBasis(XBA_RAMP)).domain([0,MET.top]); }
 
 /* ---------- palette ---------- */
 /* An illumination ramp: unlit board through to a fully lit bulb. The same idea the
@@ -710,6 +759,15 @@ bandSel.property("value", BAND.ev_band+"|"+BAND.la_band).on("change", function()
   renderGrid(); renderSpray(); renderCellFan(); renderField();
 });
 
+/* The model switch. Every chart that names an expected stat redraws, which is most of
+   them, so this goes through renderAll rather than a hand-kept list that would quietly
+   fall behind the next chart added. */
+const metricSel = d3.select("#metricSel");
+metricSel.property("value", MET.id).on("change", function(){
+  MET = METRICS[this.value] || METRICS.ba;
+  renderAll();
+});
+
 /* ramps in the legends */
 function paintRamp(sel, interp, n){
   const stops=[]; for(let i=0;i<=n;i++) stops.push(interp(i/n));
@@ -719,50 +777,66 @@ function paintRamp(sel, interp, n){
 /* ---------- readout ---------- */
 function renderReadout(){
   const s = byPark[PARK]; if(!s) return;
-  const sorted = summary.slice().sort((a,b)=>a.gap-b.gap);
-  const rank = sorted.findIndex(d=>d.park===PARK)+1;
   const carrySorted = summary.filter(d=>d.carry_ft!=null).slice().sort((a,b)=>a.carry_ft-b.carry_ft);
   const cRank = carrySorted.findIndex(d=>d.park===PARK)+1;
+  /* Rank on whichever model is showing. Ranking on BA while the tile reads wOBA is how
+     the readout would come to contradict the chart beneath it: the two orders differ,
+     and Seattle is 1st on one and 2nd on the other. */
+  const rankOn = m => {
+    const r = summary.filter(d=>m.rel(d)!=null).slice().sort((a,b)=>m.rel(a)-m.rel(b));
+    return {n:r.length, i:r.findIndex(d=>d.park===PARK)+1};
+  };
+  const rk = rankOn(MET);
+  const isBA = MET.id==="ba";
+  const act = isBA ? s.ba : s.woba, exp = isBA ? s.xba : s.xwoba;
+  const gapTile = (m, lead) => {
+    const r = rankOn(m), v = m.rel(s);
+    if(v==null) return null;
+    return {k:(lead?"":"also ")+m.act+" − "+m.exp+" vs league", v:fp(v),
+      s:"rank "+r.i+" of "+r.n+
+        (m.z(s)!=null?" · "+d3.format(".1f")(Math.abs(m.z(s)))+"σ":"")+
+        (lead && isBA && s.adj_gap!=null ? " · hitter-adjusted "+fp(s.adj_gap)
+                                         : " · "+mv(m.id==="ba"?s.ba:s.woba)+
+                                           " against "+mv(m.id==="ba"?s.xba:s.xwoba)),
+      cls:v<0?"cold":"hot"};
+  };
   const items = [
-    {k:"Batting average", v:ba3(s.ba),
-     s:(s.hits!=null?fi(s.hits)+" hits on "+fi(s.bip)+" balls in play":"on "+fi(s.bip)+" balls in play")},
-    {k:"Expected (xBA)",  v:ba3(s.xba),
-     s:(s.xba_sum!=null
+    {k:isBA?"Batting average":"wOBA", v:mv(act),
+     s:isBA
+       ? (s.hits!=null?fi(s.hits)+" hits on "+fi(s.bip)+" balls in play"
+                     :"on "+fi(s.bip)+" balls in play")
+       : fi(s.woba_n)+" in the wOBA denominator"},
+    {k:"Expected ("+MET.exp+")", v:mv(exp),
+     s:(isBA && s.xba_sum!=null
         ? fi(Math.round(s.xba_sum))+" expected — "+
           (s.hits_vs_xba<0 ? "short by "+fi(Math.round(-s.hits_vs_xba))
                            : "over by "+fi(Math.round(s.hits_vs_xba)))
         : "from exit velocity and angle alone")},
-    {k:"BA − xBA vs league", v:fp(s.gap_rel!=null?s.gap_rel:s.gap-LG_GAP),
-     s:"rank "+rank+" of "+sorted.length+
-       (s.gap_z!=null?" · "+d3.format(".1f")(Math.abs(s.gap_z))+"σ":"")+
-       " · hitter-adjusted "+fp(s.adj_gap),
-     cls: (s.gap-LG_GAP)<0?"cold":"hot"},
+    gapTile(MET, true),
+  ];
+  // The hits count has no wOBA analogue -- summing a rate of weighted outcomes gives a
+  // number in no unit anyone reports -- so it travels with the model that owns it.
+  if(isBA) items.push(
     {k:"Hits vs expectation", v:(s.hits_vs_lg==null?"—":d3.format("+,.0f")(s.hits_vs_lg)),
      s:(s.hits_vs_lg==null?"":"against the league · "+
         d3.format("+,.0f")(s.hits_vs_lg_per_season)+" per season"+
         (s.hits_vs_xba!=null?" · "+d3.format("+,.0f")(s.hits_vs_xba)+" against xBA raw":"")),
-     cls:(s.hits_vs_lg==null?"":(s.hits_vs_lg<0?"cold":"hot"))},
+     cls:(s.hits_vs_lg==null?"":(s.hits_vs_lg<0?"cold":"hot"))});
+  items.push(
     {k:"Carry vs league", v:(s.carry_ft==null?"—":f1(s.carry_ft)+" ft"),
      s:(s.carry_ft==null?"":"rank "+cRank+" of "+carrySorted.length+" · air balls only"),
-     cls:(s.carry_ft==null?"":(s.carry_ft<0?"cold":"hot"))}
-  ];
-  // The same effect priced rather than counted. It ranks the parks differently, because
-  // wOBA cares which hit types went missing and BA does not.
-  if(s.wgap_rel!=null){
-    const wSorted=summary.filter(d=>d.wgap_rel!=null).slice().sort((a,b)=>a.wgap_rel-b.wgap_rel);
-    items.push({k:"wOBA − xwOBA vs league", v:fp(s.wgap_rel),
-      s:"rank "+(wSorted.findIndex(d=>d.park===PARK)+1)+" of "+wSorted.length+
-        (s.wgap_z!=null?" · "+d3.format(".1f")(Math.abs(s.wgap_z))+"σ":"")+
-        " · wOBA "+ba3(s.woba)+" against "+ba3(s.xwoba),
-      cls:s.wgap_rel<0?"cold":"hot"});
-  }
+     cls:(s.carry_ft==null?"":(s.carry_ft<0?"cold":"hot"))});
+  // The model NOT selected, kept on the board. The two rank the parks differently and
+  // the difference is the finding, so hiding one of them would bury it.
+  items.push(gapTile(isBA?METRICS.woba:METRICS.ba, false));
   if(s.k_pf!=null){
     const kSorted=summary.filter(d=>d.k_pf!=null).slice().sort((a,b)=>b.k_pf-a.k_pf);
     items.push({k:"Strikeout factor", v:d3.format(".3f")(s.k_pf),
       s:"rank "+(kSorted.findIndex(d=>d.park===PARK)+1)+" of "+kSorted.length+
         " · raw "+d3.format(".1%")(s.k_pct), cls:s.k_pf>1?"cold":"hot"});
   }
-  const sel = d3.select("#readout").selectAll(".stat").data(items).join("div").attr("class","stat");
+  const sel = d3.select("#readout").selectAll(".stat").data(items.filter(Boolean))
+    .join("div").attr("class","stat");
   sel.html(d=>'<span class="k">'+d.k+'</span><span class="v '+(d.cls||"")+'">'+d.v+
     '</span><span class="s">'+d.s+'</span>');
 }
@@ -777,28 +851,29 @@ function renderGrid(){
 
   const svg=d3.select("#gridChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
-  const gMaxN=d3.max(lgGrid,d=>d.n)||1;
+  const col=actColor();
+  const gMaxN=d3.max(lgGrid,MET.n)||1;
   const gridOpacity=d3.scaleSqrt().domain([0,gMaxN]).range([0.3,1]).clamp(true);
 
   svg.append("g").selectAll("rect")
-    .data(lgGrid.filter(d=>d.n>=25)).join("rect")
+    .data(lgGrid.filter(d=>MET.n(d)>=25)).join("rect")
       .attr("class","cell").attr("tabindex",0)
       .attr("x",d=>x(d.ev_bin)).attr("y",d=>y(d.la_bin))
       .attr("width",x.bandwidth()).attr("height",y.bandwidth())
-      .attr("fill",d=>xbaColor(d.xba))
+      .attr("fill",d=>col(MET.x(d)))
       // Paler cells hold fewer balls. Square-root again, so opacity tracks precision.
-      .attr("opacity",d=>gridOpacity(d.n))
+      .attr("opacity",d=>gridOpacity(MET.n(d)))
       .on("mousemove",(e,d)=>showTip(e,
         "<b>"+d.ev_bin+"–"+(d.ev_bin+2.5)+" mph, "+d.la_bin+"–"+(d.la_bin+2.5)+"°</b><br>"+
-        "xBA "+f3(d.xba)+" &middot; BA "+f3(d.ba)+"<br>"+fi(d.n)+" batted balls"+
-        "<br>±"+f3(1.96*Math.sqrt(d.ba*(1-d.ba)/d.n)).slice(1)+" on the actual"))
+        MET.exp+" "+f3(MET.x(d))+" &middot; "+MET.act+" "+f3(MET.a(d))+"<br>"+
+        fi(MET.n(d))+" batted balls"))
       .on("mouseleave",hideTip)
       .on("click",(e,d)=>selectFromGrid(d))
       .on("keydown",(e,d)=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();selectFromGrid(d);} });
 
   /* outline the cells belonging to the active band */
   const inBand = d=>evBandOf(d.ev_bin)===BAND.ev_band && laBandOf(d.la_bin)===BAND.la_band;
-  const sel = lgGrid.filter(d=>d.n>=25 && inBand(d));
+  const sel = lgGrid.filter(d=>MET.n(d)>=25 && inBand(d));
   if(sel.length){
     const x0=d3.min(sel,d=>x(d.ev_bin)), x1=d3.max(sel,d=>x(d.ev_bin))+x.bandwidth();
     const y0=d3.min(sel,d=>y(d.la_bin)), y1=d3.max(sel,d=>y(d.la_bin))+y.bandwidth();
@@ -838,7 +913,7 @@ function renderSpray(){
     d3.select("#sprayNote").text(""); return; }
 
   const x=d3.scaleLinear().domain([-47,47]).range([M.l,W-M.r]);
-  const y=d3.scaleLinear().domain([0,1]).range([H-M.b,M.t]);
+  const y=d3.scaleLinear().domain([0,MET.top]).range([H-M.b,M.t]);
 
   y.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
     .attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(t)).attr("y2",y(t)));
@@ -851,16 +926,16 @@ function renderSpray(){
       .attr("font-size",8.5).attr("fill",cssVar("--ink-3")).attr("letter-spacing",".08em").text(lab);
   });
 
-  const xbaLevel=d3.mean(lg,d=>d.xba);
+  const xbaLevel=d3.mean(lg,MET.x);
   svg.append("line").attr("x1",M.l).attr("x2",W-M.r).attr("y1",y(xbaLevel)).attr("y2",y(xbaLevel))
     .attr("stroke",cssVar("--ink-3")).attr("stroke-width",1.5).attr("stroke-dasharray","6,4");
   svg.append("text").attr("x",M.l+6).attr("y",y(xbaLevel)-6).attr("text-anchor","start")
-    .attr("font-size",9.5).attr("fill",cssVar("--ink-3")).text("xBA "+ba3(xbaLevel));
+    .attr("font-size",9.5).attr("fill",cssVar("--ink-3")).text(MET.exp+" "+mv(xbaLevel));
 
   // Wilson bands. Several of these bins sit near .02 or .99, where a symmetric
   // interval would run off the end of the scale, so the bounds come from the
   // analysis rather than being recomputed here.
-  const line=d3.line().x(d=>x(d.spray_bin+2.5)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+  const line=d3.line().x(d=>x(d.spray_bin+2.5)).y(d=>y(MET.a(d))).curve(d3.curveMonotoneX);
 
   /* Every ballpark, drawn. The percentile band this replaces summarised the same
      thirty curves, but a summary cannot show that two parks reach the same average by
@@ -868,7 +943,7 @@ function renderSpray(){
      outliers and the shared skeleton are all legible at once here, and the selected park
      is read against the actual field rather than against a quantile. */
   const others = d3.group(pkSpray.filter(sameBand), d => d.park);
-  const pline = d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+  const pline = d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(MET.a(d))).curve(d3.curveMonotoneX);
   const og = svg.append("g").attr("class","other-parks");
   others.forEach((series, park) => {
     if (park === PARK || series.length < 6) return;
@@ -891,90 +966,91 @@ function renderSpray(){
     .attr("pointer-events","none");
 
   if(pk.length){
-    const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(d.ba)).curve(d3.curveMonotoneX);
+    const lineP=d3.line().x(d=>x(d.spray_c+3.75)).y(d=>y(MET.a(d))).curve(d3.curveMonotoneX);
     // Per-point whiskers rather than a filled band: one park in one 7.5-degree bin holds
     // only tens of balls, so its 95% interval is wide enough that a filled band swamps the
     // park-spread band underneath it. Whiskers carry the same number and match the
     // encoding used on every other chart here.
-    if(pk[0].ba_lo!=null){
+    if(MET.lo(pk[0])!=null){
       const g=svg.append("g").attr("class","pk-err").attr("pointer-events","none");
       g.selectAll("line.v").data(pk).join("line")
         .attr("x1",d=>x(d.spray_c+3.75)).attr("x2",d=>x(d.spray_c+3.75))
-        .attr("y1",d=>y(d.ba_lo)).attr("y2",d=>y(d.ba_hi))
+        .attr("y1",d=>y(MET.lo(d))).attr("y2",d=>y(MET.hi(d)))
         .attr("stroke",cssVar("--accent")).attr("stroke-width",1).attr("opacity",.55);
-      [["ba_lo"],["ba_hi"]].forEach(([k])=>g.selectAll(null).data(pk).join("line")
+      [MET.lo,MET.hi].forEach(f=>g.selectAll(null).data(pk).join("line")
         .attr("x1",d=>x(d.spray_c+3.75)-3).attr("x2",d=>x(d.spray_c+3.75)+3)
-        .attr("y1",d=>y(d[k])).attr("y2",d=>y(d[k]))
+        .attr("y1",d=>y(f(d))).attr("y2",d=>y(f(d)))
         .attr("stroke",cssVar("--accent")).attr("stroke-width",1).attr("opacity",.55));
     }
     svg.append("path").datum(pk).attr("fill","none").attr("stroke",cssVar("--accent"))
       .attr("stroke-width",2.6).attr("d",lineP)
       .attr("pointer-events","none");
     svg.append("g").selectAll("circle").data(pk).join("circle")
-      .attr("cx",d=>x(d.spray_c+3.75)).attr("cy",d=>y(d.ba)).attr("r",3.2)
+      .attr("cx",d=>x(d.spray_c+3.75)).attr("cy",d=>y(MET.a(d))).attr("r",3.2)
       .attr("fill",cssVar("--accent"))
       .on("mousemove",(e,d)=>showTip(e,"<b>"+nameOf[PARK]+"</b><br>spray "+d.spray_c+"° to "+(d.spray_c+7.5)+
-        "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
-        "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
+        "°<br>"+MET.act+" "+f3(MET.a(d))+(MET.lo(d)!=null?" ["+mv(MET.lo(d))+", "+mv(MET.hi(d))+"]":"")+
+        "<br>"+MET.exp+" "+f3(MET.x(d))+"<br>"+fi(MET.n(d))+" balls"))
       .on("mouseleave",hideTip);
   }
   svg.append("g").selectAll("circle.lg").data(lg).join("circle")
-    .attr("cx",d=>x(d.spray_bin+2.5)).attr("cy",d=>y(d.ba)).attr("r",2.1)
+    .attr("cx",d=>x(d.spray_bin+2.5)).attr("cy",d=>y(MET.a(d))).attr("r",2.1)
     .attr("fill",cssVar("--ink-2")).attr("opacity",.6)
     .on("mousemove",(e,d)=>showTip(e,"<b>League</b><br>spray "+d.spray_bin+"° to "+(d.spray_bin+5)+
-      "°<br>BA "+f3(d.ba)+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
-      "<br>xBA "+f3(d.xba)+"<br>"+fi(d.n)+" balls"))
+      "°<br>"+MET.act+" "+f3(MET.a(d))+(MET.lo(d)!=null?" ["+mv(MET.lo(d))+", "+mv(MET.hi(d))+"]":"")+
+      "<br>"+MET.exp+" "+f3(MET.x(d))+"<br>"+fi(MET.n(d))+" balls"))
     .on("mouseleave",hideTip);
 
   // Sample rail: one bar per spray bin, square-root scaled, sitting on the baseline.
   // The thin ends are the foul-line bins, which is where the curve is most dramatic
   // and least certain.
-  const railMax=d3.max(lg,d=>d.n)||1;
+  const railMax=d3.max(lg,MET.n)||1;
   const railH=d3.scaleSqrt().domain([0,railMax]).range([0,16]);
   const bw=(x(5)-x(0))*0.8;
   svg.append("g").selectAll("rect.nr").data(lg).join("rect").attr("class","nr")
     .attr("x",d=>x(d.spray_bin+2.5)-bw/2).attr("width",bw)
-    .attr("y",d=>H-M.b+2).attr("height",d=>Math.max(1,railH(d.n)))
+    .attr("y",d=>H-M.b+2).attr("height",d=>Math.max(1,railH(MET.n(d))))
     .attr("fill",cssVar("--ink-3")).attr("opacity",.5)
-    .on("mousemove",(e,d)=>showTip(e,fi(d.n)+" balls in this bin"))
+    .on("mousemove",(e,d)=>showTip(e,fi(MET.n(d))+" balls in this bin"))
     .on("mouseleave",hideTip);
 
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(7).tickFormat(d=>d+"°"));
   svg.append("g").attr("class","axis").attr("transform",`translate(${M.l},0)`)
-    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>ba3(d)));
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d=>mv(d)));
   svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",12)
-    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text("BATTING AVERAGE");
+    .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3")).text(MET.axis);
 
   d3.select("#sprayKey").html(
     '<span style="color:var(--accent)">━</span> '+nameOf[PARK]+
     ' &nbsp; <span style="color:var(--cold)">━</span> other parks ('+(others.size-1)+')'+
     ' &nbsp; <span style="color:var(--ink-2)">━</span> league mean'+
-    ' &nbsp; <span style="color:var(--ink-3)">╌╌</span> xBA');
+    ' &nbsp; <span style="color:var(--ink-3)">╌╌</span> '+MET.exp);
 
-  const lo=d3.min(lg,d=>d.ba), hi=d3.max(lg,d=>d.ba);
+  const lo=d3.min(lg,MET.a), hi=d3.max(lg,MET.a);
   /* The single dashed rule is honest only if every park really is assigned the same
      expected value. Measure it: within one contact cell the parks barely differ on xBA
      and differ enormously on what happens. */
   let spreadNote="";
   {
+    const wsum=(v,f)=>d3.sum(v,d=>f(d)*MET.n(d))/d3.sum(v,MET.n);
     const byPark=d3.rollup(pkSpray.filter(sameBand),
-      v=>({x:d3.sum(v,d=>d.xba*d.n)/d3.sum(v,d=>d.n), b:d3.sum(v,d=>d.ba*d.n)/d3.sum(v,d=>d.n)}),
-      d=>d.park);
-    const xs=[...byPark.values()].map(d=>d.x), bs=[...byPark.values()].map(d=>d.b);
+      v=>({x:wsum(v,MET.x), b:wsum(v,MET.a)}), d=>d.park);
+    const xs=[...byPark.values()].map(d=>d.x).filter(v=>v!=null&&isFinite(v));
+    const bs=[...byPark.values()].map(d=>d.b).filter(v=>v!=null&&isFinite(v));
     if(xs.length>=10){
       const xr=d3.max(xs)-d3.min(xs), br=d3.max(bs)-d3.min(bs);
-      spreadNote="Across the "+xs.length+" ballparks, xBA in this cell spans only <b>"+
-        ba3(d3.min(xs))+"–"+ba3(d3.max(xs))+"</b> while what actually happened spans <b>"+
-        ba3(d3.min(bs))+"–"+ba3(d3.max(bs))+"</b> — "+(br/xr).toFixed(0)+
+      spreadNote="Across the "+xs.length+" ballparks, "+MET.exp+" in this cell spans only <b>"+
+        mv(d3.min(xs))+"–"+mv(d3.max(xs))+"</b> while what actually happened spans <b>"+
+        mv(d3.min(bs))+"–"+mv(d3.max(bs))+"</b> — "+(br/xr).toFixed(0)+
         "× the spread, on contact the model calls identical.";
     }
   }
-  const nTot=d3.sum(lg,d=>d.n), nMin=d3.min(lg,d=>d.n);
+  const nTot=d3.sum(lg,MET.n), nMin=d3.min(lg,MET.n);
   d3.select("#sprayNote").html(
-    "In this cell xBA sits at "+ba3(xbaLevel)+" everywhere. The real batting average runs from <b>"+
-    ba3(lo)+"</b> to <b>"+ba3(hi)+"</b> depending only on direction — a spread of "+
-    ba3(hi-lo)+" that the model treats as identical contact."+
+    "In this cell "+MET.exp+" sits at "+mv(xbaLevel)+" everywhere. The real "+MET.full+
+    " runs from <b>"+mv(lo)+"</b> to <b>"+mv(hi)+"</b> depending only on direction — a spread of "+
+    mv(hi-lo)+" that the model treats as identical contact."+
     (spreadNote ? "<br>"+spreadNote : "")+
     "<br><span style='opacity:.75'>"+fi(nTot)+" batted balls league-wide across "+lg.length+
     " bins, thinnest "+fi(nMin)+". Every other ballpark is drawn in blue — click one to "+
@@ -990,7 +1066,8 @@ function renderSpray(){
    coloured by what actually happened there. It is the curve above, laid onto the field
    the balls were hit into. */
 function drawCellFan(sel, rows, opts){
-  const {title, wedge, dist, ba, n, sub} = opts;
+  const {title, wedge, dist, sub} = opts;
+  const ba = MET.a, n = MET.n;
   const W=470, H=400, cx=W/2, cy=H-30;
   const svg=d3.select(sel).attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
@@ -1022,6 +1099,7 @@ function drawCellFan(sel, rows, opts){
   // Wedge thickness carries the sample: a thin band is a bin you should not lean on.
   const maxN=d3.max(rows,n)||1;
   const thick=d3.scaleSqrt().domain([0,maxN]).range([5,30]);
+  const fanCol=actColor();
 
   g.selectAll("path.w").data(rows).join("path")
     .attr("d",d=>{
@@ -1029,11 +1107,11 @@ function drawCellFan(sel, rows, opts){
       return d3.arc()({innerRadius:Math.max(0,rr-t), outerRadius:rr+t,
         startAngle:wedge(d)[0]*Math.PI/180, endAngle:wedge(d)[1]*Math.PI/180});
     })
-    .attr("fill",d=>xbaColor(ba(d)))
+    .attr("fill",d=>fanCol(ba(d)))
     .on("mousemove",(e,d)=>showTip(e,
       "<b>"+wedge(d)[0]+"° to "+wedge(d)[1]+"°</b><br>"+
       "lands about "+Math.round(dist(d))+" ft<br>"+
-      "BA "+f3(ba(d))+(d.ba_lo!=null?" ["+ba3(d.ba_lo)+", "+ba3(d.ba_hi)+"]":"")+
+      MET.act+" "+f3(ba(d))+(MET.lo(d)!=null?" ["+mv(MET.lo(d))+", "+mv(MET.hi(d))+"]":"")+
       "<br>"+fi(n(d))+" balls"))
     .on("mouseleave",hideTip);
 
@@ -1051,32 +1129,33 @@ function renderCellFan(){
 
   d3.select("#cellFanTitle").text(BAND.ev_band+" mph at "+BAND.la_band+"°, on the field");
   drawCellFan("#cellFanLg", lg, {title:"League",
-    wedge:d=>[d.spray_bin,d.spray_bin+5], dist:d=>d.dist, ba:d=>d.ba, n:d=>d.n,
+    wedge:d=>[d.spray_bin,d.spray_bin+5], dist:d=>d.dist,
     sub:"HOME PLATE · LEFT FIELD IS NEGATIVE"});
   drawCellFan("#cellFanPk", pk, {title:nameOf[PARK]||PARK,
-    wedge:d=>[d.spray_c,d.spray_c+7.5], dist:d=>d.dist, ba:d=>d.ba, n:d=>d.n,
+    wedge:d=>[d.spray_c,d.spray_c+7.5], dist:d=>d.dist,
     sub:"COARSER BANDS — ONE PARK, A THIRTIETH OF THE CONTACT"});
 
   d3.select("#cellFanKey").html('<span>.00</span><span class="ramp" id="rampCell"></span>'+
-    '<span>1.00</span><span style="margin-left:6px">actual BA &middot; band thickness = sample</span>');
-  paintRamp("#rampCell", xbaColor, 12);
+    '<span>'+MET.top.toFixed(2)+'</span><span style="margin-left:6px">actual '+MET.act+
+    ' &middot; band thickness = sample</span>');
+  { const c=actColor(); paintRamp("#rampCell", t=>c(t*MET.top), 12); }
 
   if(lg.length){
     const near=lg.reduce((a,b)=>Math.abs(a.spray_bin+2.5)<Math.abs(b.spray_bin+2.5)?a:b);
-    const best=lg.reduce((a,b)=>a.ba>b.ba?a:b);
+    const best=lg.reduce((a,b)=>MET.a(a)>MET.a(b)?a:b);
     d3.select("#cellFanNote").html(
       "Every wedge sits at the median distance those balls actually travelled, so the arc is "+
       "roughly where this contact lands. Straight at "+Math.round(near.dist)+" ft it is worth <b>"+
-      ba3(near.ba)+"</b>; the same contact toward "+
+      mv(MET.a(near))+"</b>; the same contact toward "+
       (best.spray_bin<0?"left":"right")+" field at "+Math.round(best.dist)+" ft is worth <b>"+
-      ba3(best.ba)+"</b>. Same speed, same angle, same xBA.");
+      mv(MET.a(best))+"</b>. Same speed, same angle, same "+MET.exp+".");
   } else d3.select("#cellFanNote").text("");
 }
 
 /* ---------- field fan ---------- */
 /* Location cells swing far harder than park totals do -- a 380-foot cell is a home run
    down the line and an out to center -- so the fan needs its own, wider colour domain. */
-function fieldColor(){ return d3.scaleDiverging(gapRamp()).domain([-0.30,0,0.30]); }
+function fieldColor(){ return d3.scaleDiverging(gapRamp()).domain([-MET.fanExt,0,MET.fanExt]); }
 
 function drawField(svgSel, rows, title){
   const W=430, H=400, cx=W/2, cy=H-26, maxR=430;
@@ -1095,19 +1174,23 @@ function drawField(svgSel, rows, title){
 
   svg.append("g").attr("transform",`translate(${cx},${cy})`).selectAll("path")
     .data(rows.filter(d=>d.db<maxR && Math.abs(d.sb)<=48)).join("path")
-      .attr("d",arc).attr("fill",d=>fc(d.ba-d.xba)).attr("stroke","none")
+      .attr("d",arc).attr("fill",d=>fc(MET.a(d)-MET.x(d))).attr("stroke","none")
       // These are the thinnest bins anywhere here — a median of about 50 balls, so a
       // 95% interval near ±.085. Cells whose interval spans zero are faded rather than
       // dropped: absence of evidence still tells you where the ball went.
       .attr("opacity",d=>{
-        if(d.gap_sem==null) return 1;
-        return Math.abs(d.ba-d.xba) > Z95*d.gap_sem ? 1 : 0.3;
+        const sem=MET.cellSem(d);
+        if(sem==null) return 1;
+        return Math.abs(MET.a(d)-MET.x(d)) > Z95*sem ? 1 : 0.3;
       })
-      .on("mousemove",(e,d)=>showTip(e,"<b>"+Math.round(d.db)+"–"+Math.round(d.db+20)+" ft, "+
-        d.sb+"°</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+"<br>diff "+fp(d.ba-d.xba)+
-        (d.gap_sem!=null?" ± "+ba3(Z95*d.gap_sem):"")+
-        "<br>"+fi(d.n)+" balls"+
-        (d.gap_sem!=null && Math.abs(d.ba-d.xba)<=Z95*d.gap_sem?"<br><i>interval spans zero</i>":"")))
+      .on("mousemove",(e,d)=>{
+        const sem=MET.cellSem(d), diff=MET.a(d)-MET.x(d);
+        showTip(e,"<b>"+Math.round(d.db)+"–"+Math.round(d.db+20)+" ft, "+
+          d.sb+"°</b><br>"+MET.act+" "+f3(MET.a(d))+" &middot; "+MET.exp+" "+f3(MET.x(d))+
+          "<br>diff "+fp(diff)+(sem!=null?" ± "+mv(Z95*sem):"")+
+          "<br>"+fi(MET.n(d))+" balls"+
+          (sem!=null && Math.abs(diff)<=Z95*sem?"<br><i>interval spans zero</i>":""));
+      })
       .on("mouseleave",hideTip);
 
   /* distance rings + foul lines */
@@ -1131,10 +1214,13 @@ function drawField(svgSel, rows, title){
 function renderField(){
   d3.select("#fieldTitle").text(nameOf[PARK]||PARK);
   drawField("#fieldChart", fieldMap.filter(d=>d.park===PARK), "HOME PLATE · LEFT FIELD IS NEGATIVE");
+  // Pooling the parks needs BOTH readings carried through, not just the active one:
+  // the league fan is redrawn on toggle from this same rollup.
+  const wm=(v,f,cnt)=>d3.sum(v,d=>f(d)*cnt(d))/d3.sum(v,cnt);
   const lgField = d3.rollups(fieldMap, v=>({
-      n:d3.sum(v,d=>d.n),
-      ba:d3.sum(v,d=>d.ba*d.n)/d3.sum(v,d=>d.n),
-      xba:d3.sum(v,d=>d.xba*d.n)/d3.sum(v,d=>d.n)
+      n:d3.sum(v,d=>d.n), wn:d3.sum(v,d=>d.wn),
+      ba:wm(v,d=>d.ba,d=>d.n), xba:wm(v,d=>d.xba,d=>d.n),
+      woba:wm(v,d=>d.woba,d=>d.wn), xwoba:wm(v,d=>d.xwoba,d=>d.wn)
     }), d=>d.sb+"|"+d.db)
     .map(([k,v])=>({sb:+k.split("|")[0], db:+k.split("|")[1], ...v}));
   drawField("#fieldChartLg", lgField, "ALL 30 PARKS COMBINED");
@@ -1528,8 +1614,8 @@ function renderK(){
 
 /* ---------- park ranking + table ---------- */
 function renderRank(){
-  const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
-  const rows=summary.slice().sort((a,b)=>rel(a)-rel(b));
+  const rel=MET.rel;
+  const rows=summary.filter(d=>rel(d)!=null).slice().sort((a,b)=>rel(a)-rel(b));
   const M={t:74,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
   const svg=d3.select("#rankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
   svg.selectAll("*").remove();
@@ -1540,23 +1626,27 @@ function renderRank(){
   // A park is only distinguishable from the league if its interval clears zero.
   // Nineteen of thirty-two are not, and drawing them at full strength implies an
   // ordering the sample cannot support.
-  const moe=d=>d.gap_sem!=null?Z95*d.gap_sem:null;
+  const moe=d=>MET.sem(d)!=null?Z95*MET.sem(d):null;
   const sig=d=>{const m=moe(d); return m!=null && Math.abs(rel(d))>m;};
+  // The BA charts share a fixed ±.10 ramp; wOBA runs wider, so it takes its own extent.
+  const rc=MET.id==="ba"?gapColor:d3.scaleDiverging(gapRamp()).domain([-ext,0,ext]);
 
   svg.append("g").selectAll("rect").data(rows).join("rect")
     .attr("x",d=>Math.min(x(0),x(rel(d)))).attr("y",d=>y(d.park))
     .attr("width",d=>Math.abs(x(rel(d))-x(0))).attr("height",y.bandwidth())
-    .attr("fill",d=>gapColor(rel(d)))
+    .attr("fill",d=>rc(rel(d)))
     .attr("opacity",d=>d.park===PARK?1:(sig(d)?.85:.3))
     .attr("stroke",d=>d.park===PARK?cssVar("--ink"):"none").attr("stroke-width",1.4)
     .style("cursor","pointer")
     .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>"+
-      (d.hits!=null?fi(d.hits)+" hits vs "+fi(Math.round(d.xba_sum))+" expected<br>":"")+
-      "BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
-      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+ba3(moe(d)):"")+
-      "<br>"+fi(d.bip)+" balls in play"+
-      (d.gap_z!=null?" &middot; "+d3.format(".1f")(Math.abs(d.gap_z))+"σ":"")+
-      (d.hits_vs_lg!=null?"<br>"+d3.format("+,.0f")(d.hits_vs_lg)+" hits":"")+
+      (MET.id==="ba"&&d.hits!=null
+        ? fi(d.hits)+" hits vs "+fi(Math.round(d.xba_sum))+" expected<br>":"")+
+      MET.act+" "+f3(MET.id==="ba"?d.ba:d.woba)+" &middot; "+MET.exp+" "+
+      f3(MET.id==="ba"?d.xba:d.xwoba)+
+      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+mv(moe(d)):"")+
+      "<br>"+fi(MET.id==="ba"?d.bip:d.woba_n)+" "+MET.rankLegend+
+      (MET.z(d)!=null?" &middot; "+d3.format(".1f")(Math.abs(MET.z(d)))+"σ":"")+
+      (MET.id==="ba"&&d.hits_vs_lg!=null?"<br>"+d3.format("+,.0f")(d.hits_vs_lg)+" hits":"")+
       (sig(d)?"":"<br><i>inside its own error bar</i>")))
     .on("mouseleave",hideTip)
     .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); });
@@ -1565,7 +1655,8 @@ function renderRank(){
   drawWhisker(svg, rows.filter(d=>moe(d)!=null), {
     x, getY:d=>y(d.park), band:y.bandwidth(),
     lo:d=>rel(d)-moe(d), hi:d=>rel(d)+moe(d)});
-  drawRail(svg, rows, {x0:W-M.r+14, getY:d=>y(d.park), band:y.bandwidth(), getN:d=>d.bip});
+  drawRail(svg, rows, {x0:W-M.r+14, getY:d=>y(d.park), band:y.bandwidth(),
+    getN:d=>MET.id==="ba"?d.bip:d.woba_n});
 
   svg.append("g").selectAll("text").data(rows).join("text")
     .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
@@ -1574,7 +1665,7 @@ function renderRank(){
   svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
     .attr("stroke",cssVar("--ink-3"));
   drawDistStrip(svg, rows.map(rel), x,
-    {top:34, right:W-M.r, ref:0, fmt:d=>ba3(d), unit:""});
+    {top:34, right:W-M.r, ref:0, fmt:d=>mv(d), unit:""});
   svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
     .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
 
@@ -1612,9 +1703,9 @@ function renderSeason(){
   if(!rows.length) return;
   /* Each season is scored against that season's own league average, because the offset
      between BA and xBA drifts year to year. */
-  const rel=d=>d.gap_rel!=null?d.gap_rel:d.gap-LG_GAP;
+  const rel=MET.seasonRel, moeOf=MET.seasonMoe;
   const x=d3.scaleBand().domain(rows.map(d=>d.season)).range([M.l,W-M.r]).padding(.5);
-  const ext=Math.max(0.03,d3.max(rows,d=>Math.abs(rel(d)))*1.25);
+  const ext=Math.max(0.03,d3.max(rows,d=>Math.abs(rel(d)||0))*1.25);
   const y=d3.scaleLinear().domain([-ext,ext]).range([H-M.b,M.t]);
 
   y.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
@@ -1624,21 +1715,24 @@ function renderSeason(){
     .attr("x",d=>x(d.season)).attr("width",x.bandwidth())
     .attr("y",d=>Math.min(y(0),y(rel(d)))).attr("height",d=>Math.abs(y(rel(d))-y(0)))
     .attr("fill",d=>gapColor(rel(d)))
-    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.season+"</b><br>BA "+f3(d.ba)+" &middot; xBA "+f3(d.xba)+
-      "<br>vs league "+fp(rel(d))+(d.gap_moe!=null?" ± "+ba3(d.gap_moe):"")+
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.season+"</b><br>"+
+      // Only the BA side carries per-season means; the wOBA side carries the gap alone.
+      (MET.id==="ba" ? MET.act+" "+f3(d.ba)+" &middot; "+MET.exp+" "+f3(d.xba)+"<br>"
+                     : MET.act+" &minus; "+MET.exp+" "+fp(d.wgap)+"<br>")+
+      "vs league "+fp(rel(d))+(moeOf(d)!=null?" ± "+mv(moeOf(d)):"")+
       "<br>carry "+(d.carry_ft==null?"—":f1(d.carry_ft)+" ft")+
-      "<br>"+fi(d.bip)+" balls in play"))
+      "<br>"+fi(MET.id==="ba"?d.bip:d.woba_n)+" "+MET.rankLegend))
     .on("mouseleave",hideTip);
 
   // One season is a sixth of the sample and roughly 2.4x the interval. Without these
   // the year-to-year wobble reads as a trend.
-  svg.append("g").attr("class","err").selectAll("g").data(rows.filter(d=>d.gap_moe!=null)).join("g")
+  svg.append("g").attr("class","err").selectAll("g").data(rows.filter(d=>moeOf(d)!=null)).join("g")
     .each(function(d){
       const g=d3.select(this), cxx=x(d.season)+x.bandwidth()/2, w=Math.min(9,x.bandwidth()/3);
       g.append("line").attr("x1",cxx).attr("x2",cxx)
-        .attr("y1",y(rel(d)-d.gap_moe)).attr("y2",y(rel(d)+d.gap_moe))
+        .attr("y1",y(rel(d)-moeOf(d))).attr("y2",y(rel(d)+moeOf(d)))
         .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2);
-      [rel(d)-d.gap_moe, rel(d)+d.gap_moe].forEach(v=>
+      [rel(d)-moeOf(d), rel(d)+moeOf(d)].forEach(v=>
         g.append("line").attr("x1",cxx-w).attr("x2",cxx+w).attr("y1",y(v)).attr("y2",y(v))
           .attr("stroke",cssVar("--ink-2")).attr("stroke-width",1.2));
     });
@@ -1666,7 +1760,7 @@ function renderSeason(){
     .call(d3.axisLeft(y).ticks(5).tickFormat(d=>fp(d)));
   svg.append("text").attr("transform","rotate(-90)").attr("x",-(H-M.b)/2).attr("y",13)
     .attr("text-anchor","middle").attr("font-size",10).attr("fill",cssVar("--ink-3"))
-    .text("BA − xBA vs LEAGUE");
+    .text(MET.act+" − "+MET.exp+" vs LEAGUE");
 }
 
 /* ---------- precision ledger + the 1/sqrt(n) curve ---------- */
@@ -1786,14 +1880,25 @@ function renderAll(){
   const s0=byPark[PARK];
   d3.select("#nCarry").html(encodingKey("balls hit in the air"));
   d3.select("#nK").html(encodingKey("plate appearances"));
-  d3.select("#nRank").html(encodingKey("balls in play")+
+  d3.select("#nRank").html(encodingKey(MET.rankLegend)+
     " &nbsp;·&nbsp; faded = interval spans zero");
   d3.select("#nWrank").html(encodingKey("in the wOBA denominator")+
     " &nbsp;·&nbsp; faded = interval spans zero");
-  paintRamp("#rampXba", xbaColor, 12);
+  { const c=actColor(); paintRamp("#rampXba", t=>c(t*MET.top), 12); }
+  // Every label that names the model, refreshed together so none can drift out of step
+  // with the charts underneath it.
+  d3.select("#blindTitle").text("One "+MET.exp+" value, the entire width of the field");
+  d3.select("#gridTitle").text(MET.exp+" by exit velocity and launch angle");
+  d3.select("#rampXbaMax").text(MET.top.toFixed(2));
+  d3.select("#rankTitle").html(MET.act+" &minus; "+MET.exp+" relative to league");
+  d3.select("#rampFieldLo").text("−"+MET.fanExt.toFixed(2).slice(1));
+  d3.select("#rampFieldHi").text("+"+MET.fanExt.toFixed(2).slice(1));
+  d3.select("#fieldNote").html("Colour is "+MET.act+"&nbsp;&minus;&nbsp;"+MET.exp+
+    " within each bin, on a wider scale than the park totals above &mdash; single "+
+    "locations swing much harder than a whole ballpark does.");
   paintRamp("#rampField", fieldColor(), 14);
   d3.select("#legendGap").html('<span>−.10</span><span class="ramp" id="rampGap"></span><span>+.10</span>'+
-    '<span style="margin-left:6px">BA &minus; xBA</span>');
+    '<span style="margin-left:6px">'+MET.act+' &minus; '+MET.exp+'</span>');
   paintRamp("#rampGap", d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]), 14);
 }
 renderAll();
