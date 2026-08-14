@@ -1,15 +1,21 @@
 """
 Build the analysis tables behind the T-Mobile Park question.
 
-Core idea: Statcast's xBA is a function of exit velocity and launch angle ONLY. It is
-computed at the moment of contact, so it is blind to two things that decide whether a
-batted ball is actually a hit:
+Core idea: Statcast's expected stats are functions of exit velocity and launch angle
+ONLY. They are computed at the moment of contact, so they are blind to two things that
+decide what the batted ball actually becomes:
 
   1. WHERE the ball went (spray angle vs. that park's fence distance and defense)
   2. HOW FAR it carried (air density, which happens after contact)
 
 So (BA - xBA) at a park is the residual xBA cannot explain, and we can split that
 residual along both axes.
+
+The same residual is computed against xwOBA, which weights each outcome by its run
+value instead of scoring every hit alike. That matters here because the hit types a
+park removes are not drawn evenly: T-Mobile takes half the league's triples, and a
+triple is worth 1.6 in wOBA against a single's 0.9. wOBA - xwOBA therefore prices the
+park effect, where BA - xBA only counts it.
 
 Carry residual is the cleanest park-only signal in here: defensive positioning cannot
 change how far a ball travels for a given exit velocity and launch angle. If the method
@@ -47,7 +53,13 @@ HOME_X, HOME_Y = 125.42, 198.27
 KEEP = ["game_date", "game_year", "home_team", "away_team", "inning_topbot", "events",
         "description", "bb_type", "launch_speed", "launch_angle",
         "estimated_ba_using_speedangle", "estimated_woba_using_speedangle",
+        "woba_value", "woba_denom",
         "hc_x", "hc_y", "hit_distance_sc", "batter", "pitcher", "stand", "p_throws", "game_pk"]
+
+# Every event that carries wOBA credit. Outs weigh zero and drop out of the sum, so this
+# is the whole of the decomposition below. Weights are read off woba_value rather than
+# hardcoded, because the league re-fits them every season.
+WOBA_EVENTS = ["single", "double", "triple", "home_run", "field_error", "fielders_choice"]
 
 
 def load(stream, required=True):
@@ -68,16 +80,22 @@ def load(stream, required=True):
 
 
 def prep_bip(df):
+    """
+    Shared preparation. The two expected-stat comparisons do not run over the same rows,
+    so this stops short of choosing a population; ba_population and woba_population cut
+    it two ways.
+    """
     df = df.copy()
     df["season"] = df["game_year"].astype(int)
     df["park"] = [park_id(t, s) for t, s in zip(df["home_team"], df["season"])]
     df = df[df["events"].notna()]
     df = df[~df["events"].isin(["sac_bunt", "sac_bunt_double_play", "catcher_interf"])]
-    df = df[df["estimated_ba_using_speedangle"].notna()]
     df = df[df["launch_speed"].notna() & df["launch_angle"].notna()]
 
     df["is_hit"] = df["events"].isin(HITS).astype(float)
     df["xba"] = df["estimated_ba_using_speedangle"].astype(float)
+    df["xwoba"] = df["estimated_woba_using_speedangle"].astype(float)
+    df["woba"] = df["woba_value"].astype(float)
     df["ev"] = df["launch_speed"].astype(float)
     df["la"] = df["launch_angle"].astype(float)
     # Visiting team bats in the top of the inning.
@@ -89,6 +107,29 @@ def prep_bip(df):
     df["hc_r"] = np.sqrt(dx ** 2 + dy ** 2)               # scaled below to feet
     df.loc[(df["spray"].abs() > 50), "spray"] = np.nan    # foul-territory coordinate noise
     return df
+
+
+def ba_population(df):
+    """
+    Rows the BA - xBA comparison runs over: at-bats carrying an xBA.
+
+    The denominator lands correctly by itself because Savant assigns no xBA to sacrifice
+    flies, so they drop out exactly as they drop out of at-bats, while errors, double
+    plays and fielder's choices remain -- correct, since those are at-bats and outs.
+    """
+    return df[df["xba"].notna()].copy()
+
+
+def woba_population(df):
+    """
+    Rows the wOBA - xwOBA comparison runs over, which is NOT the same set.
+
+    wOBA counts sacrifice flies in its denominator and Savant does attach an xwOBA to
+    them (100% populated, against 0% for xBA), so they come back in here. Sacrifice
+    bunts carry woba_denom 0 and stay out. Selecting on woba_denom == 1 reproduces the
+    standard wOBA denominator without restating it.
+    """
+    return df[(df["woba_denom"] == 1) & df["xwoba"].notna()].copy()
 
 
 def calibrate_hc_scale(df):
@@ -175,6 +216,73 @@ def batter_adjusted_gap(df):
     res["raw_gap"] = (res["hits"] - res["xba"]) / res["n"]
     res["adj_gap"] = (res["hits"] - res["xba"] - res["exp_gap"]) / res["n"]
     return res[["park", "raw_gap", "adj_gap", "n"]]
+
+
+def woba_decomposition(wob):
+    """
+    Split each park's wOBA shortfall by which outcome went missing.
+
+    mean(wOBA) is a weighted sum of outcome rates, so the ACTUAL side decomposes exactly:
+
+        d mean(wOBA) = SUM over events of (rate_park - rate_league) * weight_event
+
+    Each term is that outcome's contribution in wOBA points, which is the number the hit
+    mix chart cannot give: a rate ratio says triples are down by half, but only the
+    weighted contribution says what half a park's triples is worth against half its
+    singles. xwOBA does not decompose this way -- it is one number per batted ball -- so
+    it is carried whole, as the contact-quality baseline the outcome side is read against.
+    A park whose xwOBA is level with the league but whose wOBA is not has been changed by
+    the building rather than by who batted in it.
+    """
+    lg_n = len(wob)
+    # Weights and league rates are properties of the whole population, so they are taken
+    # once rather than rescanned 700,000 rows deep inside the per-park loop.
+    weight = wob.groupby("events")["woba"].mean()
+    lg_count = wob["events"].value_counts()
+    rows = []
+    for pid, g in wob.groupby("park"):
+        n = len(g)
+        counts = g["events"].value_counts()
+        for ev in WOBA_EVENTS:
+            w = float(weight.get(ev, 0.0))
+            k = int(counts.get(ev, 0))
+            lg_k = int(lg_count.get(ev, 0))
+            rate, lg_rate = k / n, lg_k / lg_n
+            rows.append({"park": pid, "event": ev, "weight": round(w, 4),
+                         "k": k, "n": n, "rate": rate, "lg_rate": lg_rate,
+                         "contrib": (rate - lg_rate) * w,
+                         # Interval on the contribution is the interval on the rate
+                         # difference, scaled by a weight that is effectively exact.
+                         "moe": float(Z95 * w * np.sqrt(rate * (1 - rate) / n))})
+    dec = pd.DataFrame(rows)
+
+    # The parts must add back to the whole, or the chart is decorative. Carry both so a
+    # reader can see the identity hold rather than take it on faith.
+    tot = dec.groupby("park")["contrib"].sum().rename("sum_contrib")
+    actual = (wob.groupby("park")["woba"].mean() - wob["woba"].mean()).rename("woba_rel")
+    xw = (wob.groupby("park")["xwoba"].mean() - wob["xwoba"].mean()).rename("xwoba_rel")
+    check = pd.concat([tot, actual, xw], axis=1).reset_index()
+    check["resid"] = check["woba_rel"] - check["sum_contrib"]
+    return dec, check
+
+
+def woba_gap(wob):
+    """Per-park and per-season wOBA - xwOBA, against the league rather than zero."""
+    wob = wob.assign(wgap=wob["woba"] - wob["xwoba"])
+    lg = float(wob["wgap"].mean())
+    lg_season = wob.groupby("season")["wgap"].mean().to_dict()
+
+    by = wob.groupby("park").agg(
+        woba=("woba", "mean"), xwoba=("xwoba", "mean"),
+        wgap=("wgap", "mean"), wgap_sem=("wgap", "sem"), woba_n=("wgap", "size")).reset_index()
+    by["wgap_rel"] = by["wgap"] - lg
+    by["wgap_z"] = by["wgap_rel"] / by["wgap_sem"]
+
+    ps = wob.groupby(["park", "season"]).agg(
+        wgap=("wgap", "mean"), wgap_sem=("wgap", "sem"), woba_n=("wgap", "size")).reset_index()
+    ps["wgap_rel"] = ps["wgap"] - ps["season"].map(lg_season)
+    ps["wgap_moe"] = (Z95 * ps["wgap_sem"]).round(4)
+    return by, ps[["park", "season", "wgap", "wgap_rel", "wgap_moe", "woba_n"]], lg, lg_season
 
 
 def park_factors(bip, nb):
@@ -269,8 +377,12 @@ def park_factors(bip, nb):
 
 def main():
     print("loading balls in play...")
-    bip = prep_bip(load("bip"))
+    allbip = prep_bip(load("bip"))
+    bip = ba_population(allbip)
+    wob = woba_population(allbip)
     print(f"  {len(bip):,} batted balls, {bip['season'].min()}-{bip['season'].max()}")
+    print(f"  {len(wob):,} of them in the wOBA denominator "
+          f"({len(wob) - len(bip):+,} vs the xBA set — sacrifice flies)")
 
     scale = calibrate_hc_scale(bip)
     bip["hc_dist"] = bip["hc_r"] * scale
@@ -324,6 +436,14 @@ def main():
     print("home/road park factors...")
     summary = summary.merge(park_factors(bip, nb if len(nb) else None), on="park", how="left")
 
+    print("wOBA - xwOBA...")
+    wgap, wgap_season, lg_wgap, lg_wgap_season = woba_gap(wob)
+    summary = summary.merge(wgap, on="park", how="left")
+    wdecomp, wcheck = woba_decomposition(wob)
+    summary = summary.merge(wcheck[["park", "woba_rel", "xwoba_rel"]], on="park", how="left")
+    print(f"  league wOBA-xwOBA = {lg_wgap:+.4f}; decomposition residual max "
+          f"{wcheck['resid'].abs().max():.5f}")
+
     # xBA is not calibrated to be unbiased on this exact population -- across every park
     # the league sits a few points ABOVE its own expected mark, and that offset drifts
     # year to year. Zero is therefore the wrong reference line; the league is. Everything
@@ -357,6 +477,7 @@ def main():
     ps = ps.merge(ps_sem, on=["park", "season"], how="left")
     ps["gap_moe"] = (Z95 * ps["gap_sem"]).round(4)
     ps = ps.merge(carry_season, on=["park", "season"], how="left")
+    ps = ps.merge(wgap_season, on=["park", "season"], how="left")
 
     # ---------- EV/LA grid: the xBA model surface, and each park's actual ----------
     bip["ev_bin"] = (bip["ev"] // 2.5) * 2.5
@@ -498,11 +619,18 @@ def main():
     sea_mix = mix[(mix["park"] == "SEA") & (mix["event"] == "triple")].iloc[0]
     sea_bt = btype[(btype["park"] == "SEA") & (btype["bb_type"] == "fly_ball")].iloc[0]
     sea_ps = ps[(ps["park"] == "SEA")]
+    sea_tri_w = wdecomp[(wdecomp["park"] == "SEA") & (wdecomp["event"] == "triple")].iloc[0]
 
     ledger = [
         prec("Park BA - xBA vs league", "Every park", float(s["gap_rel"]),
              round(Z95 * float(s["gap_sem"]), 4), s["bip"], "BA",
              "one park, whole span"),
+        prec("Park wOBA - xwOBA vs league", "The cost", float(s["wgap_rel"]),
+             round(Z95 * float(s["wgap_sem"]), 4), s["woba_n"], "wOBA",
+             "the same effect, priced by run value"),
+        prec("Triples, share of the wOBA loss", "The cost", float(sea_tri_w["contrib"]),
+             round(float(sea_tri_w["moe"]), 4), int(sea_tri_w["k"]), "wOBA",
+             "62 triples, weighted 1.6 apiece"),
         prec("Same, one season", "Season by season", float(sea_ps["gap_rel"].iloc[-1]),
              float(sea_ps["gap_moe"].iloc[-1]), sea_ps["bip"].iloc[-1], "BA",
              "a sixth of the sample"),
@@ -541,8 +669,13 @@ def main():
 
     dump("meta.json", {"league_gap": round(lg_gap, 5),
                        "league_gap_by_season": {str(k): round(v, 5) for k, v in lg_gap_season.items()},
+                       "league_wgap": round(lg_wgap, 5),
+                       "league_wgap_by_season": {str(k): round(v, 5) for k, v in lg_wgap_season.items()},
+                       "league_woba": round(float(wob["woba"].mean()), 5),
+                       "league_xwoba": round(float(wob["xwoba"].mean()), 5),
                        "seasons": sorted(int(s) for s in lg_gap_season),
-                       "total_bip": int(len(bip)), "hc_scale": round(scale, 4)})
+                       "total_bip": int(len(bip)), "total_woba": int(len(wob)),
+                       "hc_scale": round(scale, 4)})
     dump("summary.json", recs(summary))
     dump("park_season.json", recs(ps))
     dump("league_grid.json", recs(lg_grid))
@@ -554,6 +687,7 @@ def main():
     dump("field_map.json", recs(fmap))
     dump("carry_spray.json", recs(carry_spray))
     dump("outcome_mix.json", recs(mix))
+    dump("woba_decomp.json", recs(wdecomp))
     dump("btype_gap.json", recs(btype))
     dump("precision.json", {"ledger": [r3(r) for r in ledger], "curve": curve,
                             "z": round(Z95, 4)})
@@ -563,6 +697,15 @@ def main():
     cols = ["park", "name", "bip", "ba", "xba", "gap", "gap_rel", "gap_z",
             "adj_gap", "carry_ft", "k_pct", "k_pf"]
     print(summary[cols].sort_values("gap").round(4).to_string(index=False))
+    print("\n=== wOBA - xwOBA vs league (the same parks, priced by run value) ===")
+    print(summary[["short", "woba_n", "woba", "xwoba", "wgap_rel", "wgap_z", "gap_rel"]]
+          .sort_values("wgap_rel").round(4).to_string(index=False))
+    print("\n=== T-Mobile's wOBA shortfall, by outcome ===")
+    d = wdecomp[wdecomp["park"] == "SEA"].copy()
+    d["ratio"] = d["rate"] / d["lg_rate"]
+    print(d[["event", "weight", "k", "rate", "lg_rate", "ratio", "contrib", "moe"]]
+          .round(5).to_string(index=False))
+    print(wcheck[wcheck["park"] == "SEA"].round(5).to_string(index=False))
     print("\n=== strikeout park factor, home/road controlled (1.00 = neutral) ===")
     print(summary[["name", "k_pct", "k_pf", "kpf_bat", "kpf_pit"]]
           .sort_values("k_pf", ascending=False).round(4).to_string(index=False))

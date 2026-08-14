@@ -25,7 +25,7 @@ DATA = ROOT / "viz" / "data"
 # grid only, and the per-park copy is ~1 MB of payload nothing reads.
 FILES = ["summary", "park_season", "league_grid",
          "league_spray", "league_spray_coarse", "park_spray", "field_map", "carry_spray",
-         "outcome_mix", "btype_gap", "spray_dist"]
+         "outcome_mix", "woba_decomp", "btype_gap", "spray_dist"]
 
 
 def pack(records):
@@ -79,7 +79,7 @@ SITE_NAV = """
 <nav class="sitebar">
   <a class="sitebar-back" href="https://morris-labs.dev/lab/xba-blind-spot">&#8592; Morris Labs</a>
   <span class="sitebar-sep">/</span>
-  <span class="sitebar-here">The xBA blind spot</span>
+  <span class="sitebar-here">T-Mobile Park, measured</span>
 </nav>
 """
 
@@ -150,7 +150,7 @@ def font_faces() -> str:
 def wrap_document(body: str) -> str:
     """Wrap the template fragment in a complete HTML document for static hosting."""
     title = re.search(r"<title>(.*?)</title>", body, re.S)
-    title_text = title.group(1).strip() if title else "The xBA Blind Spot"
+    title_text = title.group(1).strip() if title else "T-Mobile Park, measured"
     body = body.replace(title.group(0), "", 1) if title else body
 
     # Lift the template's <style> into <head> so it is parsed before first paint.
@@ -159,8 +159,8 @@ def wrap_document(body: str) -> str:
     body = body.replace(style_text, "", 1) if style else body
 
     favicon = favicon_uri()
-    desc = ("Why T-Mobile Park suppresses offense: xBA is blind to spray angle and carry, "
-            "measured across 700,000 Statcast batted balls.")
+    desc = ("Why T-Mobile Park suppresses offense: Statcast's expected stats are blind to "
+            "spray angle and carry, measured across 700,000 batted balls.")
     return f"""<!doctype html>
 <html lang="en" data-theme="dark">
 <head>

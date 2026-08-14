@@ -1,4 +1,4 @@
-<title>The xBA Blind Spot</title>
+<title>T-Mobile Park, measured</title>
 <style>
 /* ============================================================================
    Outfield board.
@@ -242,11 +242,12 @@ footer b{color:var(--chalk);font-weight:500}
 
 <header class="top"><div class="wrap masthead">
   <div class="rule-row"><span class="eyebrow">Statcast 2021&ndash;2026 &middot; 699,693 balls in play</span></div>
-  <h1>The xBA blind spot</h1>
+  <h1>T-Mobile Park, measured</h1>
   <p class="lede">
-    Expected batting average is a function of exit velocity and launch angle, both fixed at
-    contact. It has no term for where the ball went or how far it carried. Pick a ballpark
-    and a contact cell to see what that leaves out.
+    Statcast&rsquo;s expected stats are functions of exit velocity and launch angle, both
+    fixed at contact. They have no term for where the ball went or how far it carried.
+    Seattle is the park that exploits both hardest. Pick a ballpark and a contact cell to
+    see what the model leaves out.
   </p>
   <div class="readout" id="readout"></div>
 </div></header>
@@ -371,6 +372,37 @@ footer b{color:var(--chalk);font-weight:500}
         BA &minus; xBA relative to league, split by how the ball was struck. A carry effect
         should bite on balls hit in the air and leave ground balls alone.
       </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The cost<b id="nCost"></b></span>
+    <h2>What half a park&rsquo;s triples is worth</h2>
+    <p class="note">
+      The chart above counts hit types. This one prices them. wOBA weights a triple at 1.6
+      against a single&rsquo;s 0.9, so an identical rate loss is worth nearly twice as much
+      when it lands on triples &mdash; and a park that gives home runs back is credited 2.0
+      apiece for them. Left is every park on wOBA &minus; xwOBA; right is the selected
+      park&rsquo;s shortfall, split by which outcome went missing.
+    </p>
+  </div>
+  <div class="split">
+    <div class="panel">
+      <div class="panel-head"><h3>wOBA &minus; xwOBA relative to league</h3>
+        <span class="legend" id="nWrank"></span></div>
+      <div class="chart-scroll"><svg id="wrankChart"></svg></div>
+      <p class="note" style="margin-top:10px">
+        Coors Field and Sutter Health Park at the bottom are the control: both should be
+        strongly positive and both are.
+      </p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3 id="wdecompTitle">Where the wOBA went</h3>
+        <span class="legend">wOBA points, against the league</span></div>
+      <div class="chart-scroll"><svg id="wdecompChart"></svg></div>
+      <p class="note" id="wdecompNote" style="margin-top:10px"></p>
     </div>
   </div>
 </section>
@@ -506,6 +538,9 @@ const Z95 = PRECISION.z || 1.96;
 /* xBA runs a few points below reality on this population, so league-average BA − xBA is
    a small positive number rather than zero. Every comparison below is drawn against it. */
 const LG_GAP = META.league_gap || 0;
+/* Same story on the wOBA side, and a larger offset: league wOBA runs about .0096 above
+   its own xwOBA. Zero is not the neutral line on either scale. */
+const LG_WGAP = META.league_wgap || 0;
 
 const summary   = D.summary || [];
 const lgGrid    = D.league_grid || [];
@@ -518,6 +553,7 @@ const parkSeason= D.park_season || [];
 const outcomeMix= D.outcome_mix || [];
 const sprayDist = D.spray_dist || [];
 const btypeGap  = D.btype_gap || [];
+const wobaDecomp= D.woba_decomp || [];
 
 const nameOf = {}; summary.forEach(d=>nameOf[d.park]=d.name);
 const byPark = {}; summary.forEach(d=>byPark[d.park]=d);
@@ -708,6 +744,16 @@ function renderReadout(){
      s:(s.carry_ft==null?"":"rank "+cRank+" of "+carrySorted.length+" · air balls only"),
      cls:(s.carry_ft==null?"":(s.carry_ft<0?"cold":"hot"))}
   ];
+  // The same effect priced rather than counted. It ranks the parks differently, because
+  // wOBA cares which hit types went missing and BA does not.
+  if(s.wgap_rel!=null){
+    const wSorted=summary.filter(d=>d.wgap_rel!=null).slice().sort((a,b)=>a.wgap_rel-b.wgap_rel);
+    items.push({k:"wOBA − xwOBA vs league", v:fp(s.wgap_rel),
+      s:"rank "+(wSorted.findIndex(d=>d.park===PARK)+1)+" of "+wSorted.length+
+        (s.wgap_z!=null?" · "+d3.format(".1f")(Math.abs(s.wgap_z))+"σ":"")+
+        " · wOBA "+ba3(s.woba)+" against "+ba3(s.xwoba),
+      cls:s.wgap_rel<0?"cold":"hot"});
+  }
   if(s.k_pf!=null){
     const kSorted=summary.filter(d=>d.k_pf!=null).slice().sort((a,b)=>b.k_pf-a.k_pf);
     items.push({k:"Strikeout factor", v:d3.format(".3f")(s.k_pf),
@@ -1246,6 +1292,150 @@ function renderBtype(){
     .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
 }
 
+/* ---------- the same effect, priced ---------- */
+/* wOBA − xwOBA by park. Deliberately a near-clone of renderRank rather than a shared
+   generic: the two charts sit in different sections making different claims, and the
+   day one needs a different reference line or a different rail is the day a shared
+   version would have to grow a flag for every difference. */
+function renderWrank(){
+  const rel=d=>d.wgap_rel;
+  const rows=summary.filter(d=>d.wgap_rel!=null).slice().sort((a,b)=>rel(a)-rel(b));
+  const M={t:74,r:104,b:34,l:150}, W=584, rowH=17, H=M.t+M.b+rows.length*rowH;
+  const svg=d3.select("#wrankChart").attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  svg.selectAll("*").remove();
+  if(!rows.length) return;
+  const ext=d3.max(rows,d=>Math.abs(rel(d)));
+  const x=d3.scaleLinear().domain([-ext*1.15,ext*1.15]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(rows.map(d=>d.park)).range([M.t,H-M.b]).padding(.24);
+  // wOBA swings about two and a half times as wide as BA, so the fixed ±.10 scale the
+  // BA charts share would barely register here. Scaled to this chart's own extent.
+  const c=d3.scaleDiverging(gapRamp()).domain([-ext,0,ext]);
+
+  const moe=d=>d.wgap_sem!=null?Z95*d.wgap_sem:null;
+  const sig=d=>{const m=moe(d); return m!=null && Math.abs(rel(d))>m;};
+
+  svg.append("g").selectAll("rect").data(rows).join("rect")
+    .attr("x",d=>Math.min(x(0),x(rel(d)))).attr("y",d=>y(d.park))
+    .attr("width",d=>Math.abs(x(rel(d))-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>c(rel(d)))
+    .attr("opacity",d=>d.park===PARK?1:(sig(d)?.85:.3))
+    .attr("stroke",d=>d.park===PARK?cssVar("--ink"):"none").attr("stroke-width",1.4)
+    .style("cursor","pointer")
+    .on("mousemove",(e,d)=>showTip(e,"<b>"+d.name+"</b><br>"+
+      "wOBA "+f3(d.woba)+" &middot; xwOBA "+f3(d.xwoba)+
+      "<br>vs league "+fp(rel(d))+(moe(d)!=null?" ± "+ba3(moe(d)):"")+
+      "<br>"+fi(d.woba_n)+" in the wOBA denominator"+
+      (d.wgap_z!=null?" &middot; "+d3.format(".1f")(Math.abs(d.wgap_z))+"σ":"")+
+      (d.gap_rel!=null?"<br>on BA &minus; xBA: "+fp(d.gap_rel):"")+
+      (sig(d)?"":"<br><i>inside its own error bar</i>")))
+    .on("mouseleave",hideTip)
+    .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); });
+
+  drawWhisker(svg, rows.filter(d=>moe(d)!=null), {
+    x, getY:d=>y(d.park), band:y.bandwidth(),
+    lo:d=>rel(d)-moe(d), hi:d=>rel(d)+moe(d)});
+  drawRail(svg, rows, {x0:W-M.r+14, getY:d=>y(d.park), band:y.bandwidth(), getN:d=>d.woba_n});
+
+  svg.append("g").selectAll("text").data(rows).join("text")
+    .attr("x",M.l-8).attr("y",d=>y(d.park)+y.bandwidth()/2+3.5).attr("text-anchor","end")
+    .attr("font-size",9).attr("font-weight",d=>d.park===PARK?700:400)
+    .attr("fill",d=>d.park===PARK?cssVar("--ink"):cssVar("--ink-2")).text(d=>d.short||d.name);
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  drawDistStrip(svg, rows.map(rel), x, {top:34, right:W-M.r, ref:0, fmt:d=>ba3(d), unit:""});
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
+}
+
+/* Where a park's wOBA shortfall actually lands.
+   The six event bars sum exactly to the park's wOBA against the league, because
+   mean(wOBA) IS a weighted sum of outcome rates. The rows under the rule are not
+   further terms in that sum -- they split the same total a second way, into the part
+   contact quality accounts for and the part it does not. */
+const WD_LABEL={single:"Singles",double:"Doubles",triple:"Triples",home_run:"Home runs",
+                field_error:"Reached on error",fielders_choice:"Fielder's choice"};
+const WD_ORDER=["single","double","triple","home_run","field_error","fielders_choice"];
+function renderWdecomp(){
+  const s=byPark[PARK]||{};
+  const rows=WD_ORDER.map(e=>wobaDecomp.find(d=>d.park===PARK&&d.event===e)).filter(Boolean);
+  d3.select("#wdecompTitle").text((nameOf[PARK]||PARK)+": where the wOBA went");
+  const svg=d3.select("#wdecompChart");
+  svg.selectAll("*").remove();
+  if(!rows.length) return;
+
+  const total=d3.sum(rows,d=>d.contrib);
+  const tail=[{key:"__total",label:"Total vs league",v:total},
+              {key:"__xw",   label:"of which contact quality", v:s.xwoba_rel},
+              {key:"__pk",   label:"left over — the park",     v:s.wgap_rel}]
+             .filter(d=>d.v!=null);
+  const all=rows.map(d=>({key:d.event,label:WD_LABEL[d.event],v:d.contrib,d})).concat(tail);
+
+  // The left column has to hold "of which contact quality" outright, which is wider than
+  // any of the outcome names; 136 and 154 both clipped its first character.
+  const M={t:14,r:150,b:36,l:172}, W=596, rowH=32, H=M.t+M.b+all.length*rowH+8;
+  svg.attr("viewBox",[0,0,W,H]).attr("width",W).attr("height",H);
+  const ext=Math.max(0.006,d3.max(all,d=>Math.abs(d.v))*1.2);
+  const x=d3.scaleLinear().domain([-ext,ext]).range([M.l,W-M.r]);
+  const y=d3.scaleBand().domain(all.map(d=>d.key)).range([M.t,H-M.b]).padding(.34);
+  const c=d3.scaleDiverging(gapRamp()).domain([-ext,0,ext]);
+
+  x.ticks(5).forEach(t=>svg.append("line").attr("class","gridline")
+    .attr("x1",x(t)).attr("x2",x(t)).attr("y1",M.t).attr("y2",H-M.b));
+
+  svg.append("g").selectAll("rect").data(all).join("rect")
+    .attr("x",d=>Math.min(x(0),x(d.v))).attr("y",d=>y(d.key))
+    .attr("width",d=>Math.abs(x(d.v)-x(0))).attr("height",y.bandwidth())
+    .attr("fill",d=>c(d.v))
+    // The rows below the rule restate the same total, so they are drawn washed out and
+    // outlined -- they must not read as further contributions to it.
+    .attr("opacity",d=>d.d?1:.4)
+    .attr("stroke",d=>d.d?"none":cssVar("--ink-3")).attr("stroke-width",1)
+    .on("mousemove",(e,d)=>showTip(e, d.d
+      ? "<b>"+d.label+"</b><br>"+d3.format(".2%")(d.d.rate)+" of the wOBA denominator"+
+        "<br>league "+d3.format(".2%")(d.d.lg_rate)+
+        "<br>weight "+f3(d.d.weight)+" &rarr; "+fp(d.v)+" of wOBA"+
+        (d.d.moe!=null?" ± "+ba3(d.d.moe):"")+
+        "<br>"+fi(d.d.k)+" here against "+fi(Math.round(d.d.lg_rate*d.d.n))+" at the league rate"
+      : "<b>"+d.label+"</b><br>"+fp(d.v)+" of wOBA"))
+    .on("mouseleave",hideTip);
+
+  drawWhisker(svg, all.filter(d=>d.d&&d.d.moe!=null), {
+    x, getY:d=>y(d.key), band:y.bandwidth(),
+    lo:d=>Math.max(d.v-d.d.moe,-ext), hi:d=>Math.min(d.v+d.d.moe,ext)});
+  drawRail(svg, rows.map(d=>({key:d.event,k:d.k})), {
+    x0:W-M.r+92, getY:d=>y(d.key), band:y.bandwidth(), getN:d=>d.k||0});
+
+  const ry=y("__total")-y.step()*0.17;
+  svg.append("line").attr("x1",8).attr("x2",W-M.r+6).attr("y1",ry).attr("y2",ry)
+    .attr("stroke",cssVar("--rule")).attr("stroke-width",1);
+
+  svg.append("g").selectAll("text.l").data(all).join("text")
+    .attr("x",M.l-9).attr("y",d=>y(d.key)+y.bandwidth()/2+4).attr("text-anchor","end")
+    .attr("font-size",10.5).attr("font-weight",d=>d.key==="__pk"?600:400)
+    .attr("fill",d=>d.d?cssVar("--ink-2"):cssVar("--ink-3")).text(d=>d.label);
+  svg.append("g").selectAll("text.v").data(all).join("text")
+    .attr("x",W-M.r+12).attr("y",d=>y(d.key)+y.bandwidth()/2+4).attr("text-anchor","start")
+    .attr("font-size",10.5).attr("font-weight",600).attr("fill",cssVar("--ink"))
+    .text(d=>fp(d.v));
+
+  svg.append("line").attr("x1",x(0)).attr("x2",x(0)).attr("y1",M.t).attr("y2",H-M.b)
+    .attr("stroke",cssVar("--ink-3"));
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-M.b})`)
+    .call(d3.axisBottom(x).ticks(5).tickFormat(d=>fp(d)));
+
+  // The caption carries the comparison the bars cannot: an outcome's share of the total
+  // against the share of contact it came from. That ratio is the point of the panel.
+  const tri=rows.find(d=>d.event==="triple");
+  d3.select("#wdecompNote").html(tri && total<0
+    ? "Triples are "+d3.format(".2%")(tri.lg_rate)+" of league contact and "+
+      d3.format(".0%")(tri.contrib/total)+" of this park&rsquo;s wOBA shortfall &mdash; "+
+      fi(tri.k)+" hit here against "+fi(Math.round(tri.lg_rate*tri.n))+
+      " at the league rate. Contact quality accounts for "+fp(s.xwoba_rel||0)+" of the "+
+      fp(total)+" total; the "+fp(s.wgap_rel||0)+" left over is the building."
+    : "Bars sum to this park&rsquo;s wOBA against the league. The rows below the rule "+
+      "split that same total into the part xwOBA can see and the part it cannot.");
+}
+
 /* ---------- strikeout park factor ---------- */
 function renderK(){
   const rows=summary.filter(d=>d.k_pf!=null).sort((a,b)=>b.k_pf-a.k_pf);
@@ -1441,16 +1631,19 @@ function renderPrecision(){
   const L=PRECISION.ledger||[];
   const t=d3.select("#precTable");
   if(!L.length){ t.html(""); return; }
+  // wOBA sits on the same visual scale as BA and takes the same baseball-style
+  // formatting -- signed, three places, no leading zero.
+  const isRate=r=>r.unit==="BA"||r.unit==="wOBA";
   const fmtEst=r=>{
     if(r.est==null) return "—";
-    if(r.unit==="BA") return fp(r.est);
+    if(isRate(r)) return fp(r.est);
     if(r.unit==="ft") return d3.format("+.2f")(r.est)+" ft";
     if(r.unit==="%")  return d3.format("+.0f")(r.est)+"%";
     return d3.format(".3f")(r.est);
   };
   const fmtMoe=r=>{
     if(r.moe==null) return "—";
-    if(r.unit==="BA") return "± "+ba3(r.moe);
+    if(isRate(r)) return "± "+ba3(r.moe);
     if(r.unit==="ft") return "± "+d3.format(".2f")(r.moe);
     if(r.unit==="%")  return "± "+d3.format(".0f")(r.moe);
     return "± "+d3.format(".3f")(r.moe);
@@ -1531,6 +1724,7 @@ function renderSectionCounts(){
       (fm.length?fi(Math.round(d3.median(fm,d=>d.n))):0)+" per bin");
   set("nPhysics", s.carry_n?fi(s.carry_n)+" hit in the air":"");
   set("nMissing", s.bip?fi(s.bip)+" balls in play":"");
+  set("nCost", s.woba_n?fi(s.woba_n)+" in the wOBA denominator":"");
   set("nStrikeouts", s.k_pa?fi(s.k_pa)+" plate appearances":"");
   set("nLedger", fi(d3.sum(summary,d=>d.bip))+" across "+summary.length+" parks");
   const ps=parkSeason.filter(d=>d.park===PARK);
@@ -1542,13 +1736,16 @@ function renderSectionCounts(){
 function renderAll(){
   gapColor=d3.scaleDiverging(gapRamp()).domain([-0.10,0,0.10]);
   renderReadout(); renderGrid(); renderSpray(); renderField();
-  renderCarry(); renderMix(); renderBtype(); renderK(); renderRank(); renderSeason();
+  renderCarry(); renderMix(); renderBtype(); renderWrank(); renderWdecomp();
+  renderK(); renderRank(); renderSeason();
   renderCellFan(); renderPrecision(); renderPower(); renderSectionCounts();
   // Sample size stated on the panel, not only in the tooltip.
   const s0=byPark[PARK];
   d3.select("#nCarry").html(encodingKey("balls hit in the air"));
   d3.select("#nK").html(encodingKey("plate appearances"));
   d3.select("#nRank").html(encodingKey("balls in play")+
+    " &nbsp;·&nbsp; faded = interval spans zero");
+  d3.select("#nWrank").html(encodingKey("in the wOBA denominator")+
     " &nbsp;·&nbsp; faded = interval spans zero");
   paintRamp("#rampXba", xbaColor, 12);
   paintRamp("#rampField", fieldColor(), 14);

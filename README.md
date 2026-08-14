@@ -1,4 +1,4 @@
-# T-Mobile Park: the xBA blind spot
+# T-Mobile Park, measured
 
 Why Seattle is continually one of the lowest-offense parks in MLB, measured from
 pitch-level Statcast data pulled with [`plyball`](https://plyball.readthedocs.io/).
@@ -8,8 +8,8 @@ pitch-level Statcast data pulled with [`plyball`](https://plyball.readthedocs.io
 
 ## The argument
 
-Statcast's xBA is a function of exit velocity and launch angle, computed at the instant of
-contact. Two things decide the outcome afterward and the model can see neither:
+Statcast's expected stats are functions of exit velocity and launch angle, computed at the
+instant of contact. Two things decide the outcome afterward and the model can see neither:
 
 1. **Direction.** xBA has no spray term, so every ball in a given speed/angle cell gets the
    same expected average no matter where it was hit.
@@ -31,10 +31,17 @@ specifically; the carry deficit is cold air plus sea level. See
 | BA − xBA vs league | **−.0140** (5.8σ) | 1st of 32 | Largest hit suppression in MLB |
 | Same as a count | **−311 hits** (≈−52/season) | 1st | hits − ∑xBA, net of the league offset |
 | Same, hitters divided out | **−.0148** | 1st | Not the Mariners roster — it's the building |
+| wOBA − xwOBA vs league | **−.0155** (5.4σ) | 2nd of 32 | The same effect priced by run value |
 | Carry vs league expectation | **−3.5 ft** | 4th-shortest | Physics, not defense |
 | Strikeout park factor | **1.123** | 1st of 32 | 12% more Ks than the same people manage elsewhere |
 
 Negative in **all six seasons** (−.009 to −.020 vs league), which is the "continually" part.
+
+The one rank that moves is wOBA: Busch Stadium passes Seattle at −.0183 (6.9σ). The two
+measures agree closely on the parks (r = .94) and differ where a park's losses are
+concentrated in the expensive hit types, which is Seattle's case in one direction and
+St. Louis's in another. Coors Field (+.0338) and Sutter Health Park (+.0420) come out
+strongly positive, which is the check that the wOBA measurement works.
 
 ### It does not eat home runs
 
@@ -54,6 +61,53 @@ So the park is not a home-run suppressor — the fences are short enough (averag
 average wall height 7.6 ft vs an MLB mean of 9.6) that the 2013 move-in offsets the dead air.
 The damage lands on balls hit in the air that need to find grass, which is exactly where the
 spray-angle gradient below does its work.
+
+### What that mix is worth
+
+Rate ratios say triples are down by half. They cannot say what half a park's triples is
+worth against half its singles, because BA scores every hit alike. wOBA does not: a triple
+weighs 1.6 against a single's 0.9 and a home run's 2.0. Since mean wOBA *is* a weighted sum
+of outcome rates, the shortfall splits exactly (residual 2e-5):
+
+| Outcome | Rate vs league | Weight | wOBA cost | Share of the total |
+|---|---|---|---|---|
+| Singles | ×0.95 | 0.90 | **−.0101** | 53% |
+| Doubles | ×0.90 | 1.25 | **−.0081** | 43% |
+| Triples | ×0.51 | 1.60 | **−.0042** | **22%** |
+| Home runs | ×1.05 | 2.00 | +.0049 | −26% |
+| Errors, fielder's choice | — | ~0.90 | −.0015 | 8% |
+| **Total wOBA vs league** | | | **−.0190** | |
+| *of which contact quality (xwOBA)* | | | *−.0035* | 18% |
+| ***left over — the park*** | | | **−.0155** | 82% |
+
+Triples are 0.54% of league contact and 22% of the loss. Nothing else on the board returns
+that much per ball. Home runs run the other way and give back a quarter of it, which is why
+the park reads as merely below average on wOBA and worst in MLB on batting average.
+
+### Why the triples go
+
+62 triples in six seasons against 121 at the league rate — the lowest of any park with a
+full span. Two things do it, at opposite ends of the field.
+
+**The corners are too short.** On air balls carrying 300–420 ft down the right-field line
+(+35° to +50°), T-Mobile turns **45.6%** into home runs against a league 33.5%, and 0.7%
+into triples against 2.2%. A ball that caroms around the corner for a triple in a deep park
+leaves this one. The same holds in the left-field corner. This is the 2013 move-in showing
+up as a *cost* to the hitter's slower legs and a credit to his power.
+
+**The middle is too dead.** From −15° to −5° in that same distance band, T-Mobile's out
+rate is **78.0%** against a league 72.5% — the carry deficit and a 401-ft centre field
+catching balls that reach the gap elsewhere. Only 4.07% of Seattle air balls travel 400+ ft
+against a league 5.11%, and among the ones that do, the triple rate is .0021 against .0170.
+
+A triple needs a ball that lands deep, stays in the park, and beats the throw. Seattle
+squeezes it from both sides: too short at the corners for the ball to stay in, too dead in
+the middle for it to get out there. The effect is far stronger for left-handed batters
+(rate ratio **0.35**) than right (0.65), consistent with FanGraphs' handedness split.
+
+Caveat: 62 triples is the smallest sample in the project. The direction is not in doubt —
+the wOBA contribution is 3.9× its own margin of error — but the split between the two
+mechanisms above rests on a few hundred balls per spray bin.
 
 ### The blind spot, quantified
 
@@ -80,29 +134,33 @@ fifth as wide as the same measurement over one season.
 
 | Measurement | n | Estimate | 95% | ÷ MoE |
 |---|---|---|---|---|
-| Strikeout park factor | 33,442 PA | 1.123 | ± .031 | **36×** |
+| Strikeout park factor | 33,444 PA | 1.123 | ± .031 | **36×** |
 | Carry vs league | 5,705 | −3.46 ft | ± 0.52 | 6.7× |
-| Park BA − xBA vs league | 22,139 | −.0140 | ± .0047 | 3.0× |
+| Triples, wOBA cost | 62 | −.0042 | ± .0011 | 3.9× |
 | Triples vs league | 62 | −49% | ± 13pp | 3.8× |
 | Fly-ball shortfall | 5,952 | −.0264 | ± .0076 | 3.5× |
+| Park BA − xBA vs league | 22,139 | −.0140 | ± .0047 | 3.0× |
+| Park wOBA − xwOBA vs league | 22,325 | −.0155 | ± .0056 | 2.8× |
 | Spray cell, dead centre | 569 | .021 | ± .012 | 1.8× |
 | **One season** | 2,952 | −.015 | ± .013 | **1.1×** |
 
 Three consequences worth stating plainly:
 
-- **Only 13 of the 32 parks clear their own error bar.** A park sees ~23,000 balls in play
-  over six seasons, which resolves an effect of about .006 of batting average and no
-  smaller. The other 19 parks are not neutral — they are *unmeasured*, and the ranking
-  chart fades them accordingly.
+- **Only 13 of the 32 parks clear their own error bar** on BA − xBA, and 15 on
+  wOBA − xwOBA. A park sees ~23,000 balls in play over six seasons, which resolves an
+  effect of about .006 of batting average — or .0055 of wOBA — and no smaller. The
+  remaining parks are not neutral, they are *unmeasured*, and both ranking charts fade
+  them accordingly.
 - **No single T-Mobile season is strong evidence.** Four of six are individually
   significant; the interval on one season is ±.013 against an effect of ~.015. What
   carries the argument is that all six share a sign, which under a fair coin is p = 0.031.
 - **The field map is the thinnest thing here** — a median of 50 balls per cell, giving a
   95% interval near ±.085. Cells whose interval spans zero are drawn faded.
 
-The strikeout factor is by far the most certain result in the project, and the
-percentage on triples is the least — 62 triples over six seasons puts the true effect
-somewhere between −36% and −62%.
+The strikeout factor is by far the most certain result in the project. Triples are the
+thinnest of the headline numbers — 62 over six seasons puts the true effect somewhere
+between −36% and −62% — though the direction survives it comfortably either way you
+score them, as a rate or as a wOBA cost.
 
 ## Method notes
 
@@ -115,9 +173,20 @@ somewhere between −36% and −62%.
   flies** (0.0% populated), so they drop out exactly as they drop out of at-bats, while
   errors, double plays and fielder's choices remain — correct, since those are at-bats and
   they are outs.
-- **Reference frame.** xBA is not unbiased on this population: league-wide BA − xBA is
-  **+.0048**, not zero, and it drifts by season. Every comparison is against the league,
-  not against zero.
+- **The wOBA population is not the same rows.** wOBA counts sacrifice flies in its
+  denominator and Savant *does* attach an xwOBA to them (100% populated, against 0% for
+  xBA), so they come back in — 706,842 rows against 699,693. Selecting on
+  `woba_denom == 1` reproduces the standard denominator without restating it: sacrifice
+  bunts carry denom 0 and stay out.
+- **The wOBA decomposition is an identity, not a model.** Mean wOBA is a weighted sum of
+  outcome rates, so `Δ mean(wOBA) = Σ (rate_park − rate_lg) × weight` splits the shortfall
+  exactly by outcome; the residual is checked every run and is 2e-5. Weights are read off
+  `woba_value` rather than hardcoded, since the league re-fits them each season. xwOBA does
+  not decompose this way — it is one number per batted ball — so it is carried whole, as
+  the contact-quality baseline the outcome side is read against.
+- **Reference frame.** Neither expected stat is unbiased on this population: league-wide
+  BA − xBA is **+.0048** and wOBA − xwOBA is **+.0096**, not zero, and both drift by
+  season. Every comparison is against the league, not against zero.
 - **Carry residual** compares each air ball against the league median distance for its exact
   1 mph × 1° cell, re-centred so the league mean is zero. Defensive positioning cannot change
   how far a ball flies, so this isolates the park. **Validation: Coors Field comes out at
@@ -127,6 +196,7 @@ somewhere between −36% and −62%.
   averaged. 1.00 is neutral.
 - **Hitter-adjusted gap** charges each batted ball against that batter's own record in every
   *other* park, so a lineup that chronically underperforms xBA is not mistaken for a park.
+  This is computed on the xBA side only; the wOBA charts are unadjusted for hitter mix.
 - **Spray angle** is derived from the Statcast hit coordinate about home plate at
   (125.42, 198.27); negative is toward left field. Coordinates are scaled to feet by
   calibrating against `hit_distance_sc` on balls hit in the air, which gives **2.487 ft/unit**
@@ -139,9 +209,11 @@ somewhere between −36% and −62%.
 
 Independent sources agree on direction and rough magnitude:
 
-- **FanGraphs** 5-year regressed factors for Seattle: Basic 94, 2B 93, 3B 79, **SO 104**
-  (all pre-halved; unhalved ≈ 88 and 108). The SO figure corroborates the 1.123 measured here.
-- **ESPN** 2022 single-season: runs 0.886, hits 0.915, doubles 0.891, triples 0.407.
+- **FanGraphs** 5-year regressed factors for Seattle: Basic 94, 2B 93, **3B 79**, **SO 104**
+  (all pre-halved; unhalved ≈ 88 and 108). The SO figure corroborates the 1.123 measured
+  here, and 3B 79 — unhalved ≈ 58, and regressed, so shrunk toward neutral — is the
+  independent read on the triples result.
+- **ESPN** 2022 single-season: runs 0.886, hits 0.915, doubles 0.891, **triples 0.407**.
 - FanGraphs' handedness split shows the park punishes left-handed power (HR-as-LHB 93)
   notably more than right-handed (HR-as-RHB 98).
 - Published **strikeout** park factors for T-Mobile run 109–122 depending on year and method
