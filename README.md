@@ -80,6 +80,12 @@ exactly (residual 1e-4):
 | *of which contact quality (xwOBA)* | | | *−.0035* | 18% |
 | ***left over — the park*** | | | **−.0155** | 82% |
 
+How to read the size of that: wOBA is on the on-base scale, where **.320 is about league
+average and .400 is excellent**, and each outcome is weighted by its run value rather than
+counted alike. Dividing the residual by the conventional wOBA scale of ~1.2 and multiplying
+by the sample puts **−.0155 over 22,325 balls at roughly −288 runs across the span, about
+−48 a season** — the same effect as the −52 hits a season above, priced instead of counted.
+
 The reading, in order of size:
 
 - **Four fifths of it is the building.** Contact quality accounts for −.0035 of the −.0190;
@@ -207,6 +213,17 @@ score them, as a rate or as a wOBA cost.
 - **Reference frame.** Neither expected stat is unbiased on this population: league-wide
   BA − xBA is **+.0048** and wOBA − xwOBA is **+.0096**, not zero, and both drift by
   season. Every comparison is against the league, not against zero.
+- **Neither figure sits on its published denominator**, and this is the easiest thing here
+  to misread. These are batted balls; a strikeout is both an at-bat and a plate appearance
+  and is worth nothing in either statistic. Leaving 224,060 of them out lifts league
+  batting average from **.248 to .328** and league wOBA from **.326 to .379**. The page
+  states both marks under the model switch so nobody reads its .379 as a wOBA they could
+  look up. Compare parks against the league line here, never against a figure from
+  elsewhere.
+
+  For reference, over all 1,026,295 plate appearances T-Mobile's wOBA is **.3029** against
+  a league **.3260** — a raw gap of **−.0231**, which is not park-controlled but is
+  strikingly close to the **.024** Ryan Blake's independent GLMM work puts on the park.
 - **Carry residual** compares each air ball against the league median distance for its exact
   1 mph × 1° cell, re-centred so the league mean is zero. Defensive positioning cannot change
   how far a ball flies, so this isolates the park. **Validation: Coors Field comes out at

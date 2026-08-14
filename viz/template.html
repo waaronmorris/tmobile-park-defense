@@ -197,6 +197,32 @@ select:focus-visible,button:focus-visible,.cell:focus-visible,a:focus-visible{
 
 .legend{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:var(--mono);
   font-size:.66rem;color:var(--faint);min-width:0}
+
+/* The scale note. Lives inside the sticky control bar so it travels with the switch that
+   changes it -- a reader who flips the model sees the definition change in the same
+   glance. Muted and small: it is a footnote that happens to be positioned like a header. */
+.scale-note{
+  /* Its own full-width row under the selects. flex-basis alone is not enough: the default
+     flex-shrink lets it compress and sit beside the colour ramp instead of wrapping, which
+     is exactly what it did. 0 0 100% forbids the shrink. */
+  flex:0 0 100%;
+  margin-top:11px;padding-top:10px;border-top:1px solid var(--rule);
+  font-family:var(--sans);font-size:.8rem;line-height:1.55;
+  letter-spacing:0;text-transform:none;color:var(--dim);
+}
+/* The measure cap belongs on the text, not on the row: as a max-width on the flex item
+   it capped the 100% basis too, which let the item shrink back onto the line beside the
+   colour ramp -- the very thing the basis was there to prevent. */
+.scale-note > div{max-width:88ch}
+.scale-note div + div{margin-top:4px}
+.scale-note b{color:var(--chalk);font-weight:500}
+.scale-note .weights{
+  display:block;margin-top:3px;
+  font-family:var(--mono);font-size:.72rem;color:var(--faint);letter-spacing:.02em;
+}
+.scale-note .caveat{color:var(--faint)}
+.scale-note .caveat b{color:var(--bulb);font-weight:500}
+@media(max-width:640px){ .scale-note{font-size:.76rem} }
 .ramp{height:9px;width:130px;border:1px solid var(--rule-2)}
 
 .tip{
@@ -266,6 +292,7 @@ footer b{color:var(--chalk);font-weight:500}
     </select>
   </label>
   <span class="legend" id="legendGap"></span>
+  <div class="scale-note" id="scaleNote"></div>
 </div></div>
 
 <main class="wrap">
@@ -1857,6 +1884,42 @@ function renderPower(){
     "</b> parks clear their own error bar — the rest are not neutral, they are unmeasured.");
 }
 
+/* ---------- what the numbers mean ----------
+   Neither statistic here runs over its published denominator: these charts are batted
+   balls, and a strikeout is both an at-bat and a plate appearance worth nothing in
+   either metric. Leaving 224,000 of them out lifts league batting average from .248 to
+   .328 and league wOBA from .326 to .379. Quoting both marks is the difference between
+   a reader calibrating correctly and a reader concluding the page is broken. */
+function renderScaleNote(){
+  const m = META, isBA = MET.id==="ba";
+  const onContact = isBA ? m.league_ba : m.league_woba;
+  const published = isBA ? m.league_ba_allab : m.league_woba_allpa;
+  const denom = isBA ? "at-bats" : "plate appearances";
+  const what = isBA
+    ? "<b>Batting average</b> counts every hit alike &mdash; a single and a home run are "+
+      "both worth 1."
+    : "<b>wOBA</b> sits on the on-base scale, so it reads like OBP: <b>.320</b> is about "+
+      "average and <b>.400</b> is excellent. Every outcome is weighted by its run value, "+
+      "which is the one thing batting average does not do.";
+  const weights = isBA
+    ? '<span class="weights">out 0 &middot; single 1 &middot; double 1 &middot; '+
+      'triple 1 &middot; home run 1</span>'
+    : '<span class="weights">out 0 &middot; walk .70 &middot; single .90 &middot; '+
+      'double 1.25 &middot; triple 1.60 &middot; home run 2.00</span>';
+  const expl = "The <b>"+MET.exp+"</b> of a batted ball is what that same weighting predicts "+
+    "from its exit velocity and launch angle alone, so <b>"+MET.act+" &minus; "+MET.exp+
+    "</b> is what happened minus what the contact deserved.";
+  const caveat = (onContact!=null && published!=null)
+    ? '<span class="caveat">These charts cover balls in play only, so league '+MET.act+
+      ' reads <b>'+mv(onContact)+'</b> here rather than the <b>'+mv(published)+
+      '</b> you would see over all '+denom+' &mdash; strikeouts are worth nothing and are '+
+      'left out. Compare parks against the league line on the page, not against a figure '+
+      'from elsewhere.</span>'
+    : "";
+  d3.select("#scaleNote").html("<div>"+what+" "+weights+"</div><div>"+expl+"</div>"+
+    (caveat?"<div>"+caveat+"</div>":""));
+}
+
 /* Each section eyebrow states the sample that section rests on. The number is the
    structural device -- it changes with the park you select, and it is the honest
    answer to "how much is behind this?" before you read a single chart. */
@@ -1903,6 +1966,7 @@ function renderAll(){
   d3.select("#rankTitle").html(MET.act+" &minus; "+MET.exp+" relative to league");
   d3.select("#rampFieldLo").text("−"+MET.fanExt.toFixed(2).slice(1));
   d3.select("#rampFieldHi").text("+"+MET.fanExt.toFixed(2).slice(1));
+  renderScaleNote();
   d3.select("#gradientMetric").text(MET.exp);
   d3.select("#sprayRuleMetric").text(MET.exp);
   d3.select("#ledgerMetric").text(MET.exp);

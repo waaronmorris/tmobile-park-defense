@@ -441,6 +441,23 @@ def main():
         nb["batting_side"] = np.where(nb["inning_topbot"] == "Top", "away", "home")
         print(f"  {len(nb):,} non-BIP plate appearances")
 
+    # ---------- reference marks for the page's scale note ----------
+    # Both statistics here run over batted balls, which inflates them against the published
+    # figures a reader already has a feel for: a strikeout is an at-bat AND a plate
+    # appearance, and it is worth zero in both. Excluding 224,000 of them lifts league
+    # batting average from .248 to .328 and wOBA from .326 to .379. The page quotes both
+    # marks so nobody reads its .379 as a wOBA they could look up on FanGraphs, or its
+    # .328 as a batting average -- the first is a fifty-point gap and the second eighty.
+    ks = int(nb["events"].isin(["strikeout", "strikeout_double_play"]).sum()) if len(nb) else 0
+    nb_w = nb[nb["woba_denom"] == 1] if len(nb) else nb
+    ab_all = len(bip) + ks
+    pa_all = len(wob) + len(nb_w)
+    ba_all = float(bip["is_hit"].sum()) / ab_all if ab_all else None
+    woba_all = ((float(wob["woba"].sum()) + float(nb_w["woba_value"].sum())) / pa_all
+                if pa_all else None)
+    print(f"  league BA {bip['is_hit'].mean():.4f} on contact, {ba_all:.4f} over all at-bats")
+    print(f"  league wOBA {wob['woba'].mean():.4f} on contact, {woba_all:.4f} over all PA")
+
     # ---------- per-park summary ----------
     rows = []
     for pid, g in bip.groupby("park"):
@@ -719,6 +736,12 @@ def main():
                        "league_wgap_by_season": {str(k): round(v, 5) for k, v in lg_wgap_season.items()},
                        "league_woba": round(float(wob["woba"].mean()), 5),
                        "league_xwoba": round(float(wob["xwoba"].mean()), 5),
+                       "league_ba": round(float(bip["is_hit"].mean()), 5),
+                       # The same two statistics over their published denominators, which
+                       # include the strikeouts these charts never see.
+                       "league_ba_allab": None if ba_all is None else round(ba_all, 5),
+                       "league_woba_allpa": None if woba_all is None else round(woba_all, 5),
+                       "total_ab": int(ab_all), "total_pa": int(pa_all),
                        "seasons": sorted(int(s) for s in lg_gap_season),
                        "total_bip": int(len(bip)), "total_woba": int(len(wob)),
                        "hc_scale": round(scale, 4)})
