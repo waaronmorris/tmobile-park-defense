@@ -291,7 +291,7 @@ footer b{color:var(--chalk);font-weight:500}
     </div>
     <div class="panel">
       <div class="panel-head"><h3>Actual outcome by spray angle</h3><span class="legend" id="sprayKey"></span></div>
-      <p class="note" style="margin:-4px 0 10px">Every line is one ballpark, plotted against the direction the ball was hit. <b>Green</b> is the park you have selected; <b>blue</b> is every other ballpark, and clicking one selects it; <b>grey</b> is the league mean across all of them. The <b>dashed rule</b> is xBA, which is flat because direction is not one of its inputs. Green whiskers are the selected park&rsquo;s 95% interval, and the bars along the baseline are how many league balls fall in each bin.</p>
+      <p class="note" style="margin:-4px 0 10px">Every line is one ballpark, plotted against the direction the ball was hit. <b>Green</b> is the park you have selected; <b>blue</b> is every other ballpark, and clicking one selects it; <b>grey</b> is the league mean across all of them. The <b>dashed rule</b> is <b id="sprayRuleMetric">xBA</b>, which is flat because direction is not one of its inputs. Green whiskers are the selected park&rsquo;s 95% interval, and the bars along the baseline are how many league balls fall in each bin.</p>
       <div class="chart-scroll"><svg id="sprayChart"></svg></div>
       <p class="note" id="sprayNote" style="margin-top:10px"></p>
     </div>
@@ -315,7 +315,7 @@ footer b{color:var(--chalk);font-weight:500}
     <h2>Where the outs live</h2>
     <p class="note">
       Every batted ball placed where it came down, binned by direction and distance,
-      coloured by how far the outcome fell short of or beat xBA.
+      coloured by how far the outcome fell short of or beat <b id="gradientMetric">xBA</b>.
     </p>
   </div>
   <div class="split">
@@ -435,10 +435,10 @@ footer b{color:var(--chalk);font-weight:500}
     <span class="eyebrow">The ledger<b id="nLedger"></b></span>
     <h2>Every park, measured against its own contact quality</h2>
     <p class="note">
-      Measured against the league rather than zero &mdash; xBA runs slightly under reality on
-      this population, so league average is a small positive number. The adjusted column
-      divides out the hitters, charging each batted ball against that batter&rsquo;s own
-      record in every other park.
+      Measured against the league rather than zero &mdash; <b id="ledgerMetric">xBA</b> runs
+      slightly under reality on this population, so league average is a small positive
+      number. The adjusted column divides out the hitters, charging each batted ball against
+      that batter&rsquo;s own record in every other park.
     </p>
   </div>
   <div class="split">
@@ -1671,11 +1671,19 @@ function renderRank(){
 
   const rows2=summary.slice().sort((a,b)=>rel(a)-rel(b));
   const hasK = rows2.some(d=>d.k_pct);
+  /* The table follows the chart beside it. Three columns are xBA-only and are dropped
+     rather than faked on the wOBA side: the hit counts have no wOBA analogue -- summing a
+     rate of weighted outcomes gives a number in no unit anyone reports -- and the
+     hitter-adjusted gap is computed on the xBA population alone. Carrying them across
+     with BA values while every other column read wOBA is how a table starts lying. */
+  const isBA=MET.id==="ba";
   const t=d3.select("#parkTable");
-  t.html("<thead><tr><th>Park</th><th>Hits</th><th title='sum of xBA over the same balls'>Exp</th>"+
-    "<th title='hits minus summed xBA, against the league'>&Delta;H</th>"+
-    "<th>BA</th><th>xBA</th><th title='BA − xBA relative to league'>vs&nbsp;Lg</th>"+
-    "<th title='hitter mix divided out'>Adj</th>"+
+  t.html("<thead><tr><th>Park</th>"+
+    (isBA?"<th title='sum of xBA over the same balls'>Hits</th><th>Exp</th>"+
+          "<th title='hits minus summed xBA, against the league'>&Delta;H</th>":"")+
+    "<th>"+MET.act+"</th><th>"+MET.exp+"</th>"+
+    "<th title='"+MET.act+" − "+MET.exp+" relative to league'>vs&nbsp;Lg</th>"+
+    (isBA?"<th title='hitter mix divided out'>Adj</th>":"<th title='balls in the wOBA denominator'>n</th>")+
     (hasK?"<th>K%</th><th title='strikeout park factor'>K&nbsp;fac</th>":"")+
     "<th title='feet of carry vs league'>Carry</th></tr></thead><tbody></tbody>");
   t.select("tbody").selectAll("tr").data(rows2).join("tr")
@@ -1683,11 +1691,12 @@ function renderRank(){
     .style("cursor","pointer")
     .on("click",(e,d)=>{ PARK=d.park; parkSel.property("value",PARK); renderAll(); })
     .html(d=>"<td>"+d.name+"</td>"+
-      "<td>"+(d.hits==null?"—":fi(d.hits))+"</td>"+
-      "<td>"+(d.xba_sum==null?"—":fi(Math.round(d.xba_sum)))+"</td>"+
-      "<td>"+(d.hits_vs_lg==null?"—":d3.format("+,.0f")(d.hits_vs_lg))+"</td>"+
-      "<td>"+ba3(d.ba)+"</td><td>"+ba3(d.xba)+
-      "</td><td>"+fp(rel(d))+"</td><td>"+fp(d.adj_gap)+"</td>"+
+      (isBA?"<td>"+(d.hits==null?"—":fi(d.hits))+"</td>"+
+            "<td>"+(d.xba_sum==null?"—":fi(Math.round(d.xba_sum)))+"</td>"+
+            "<td>"+(d.hits_vs_lg==null?"—":d3.format("+,.0f")(d.hits_vs_lg))+"</td>":"")+
+      "<td>"+mv(isBA?d.ba:d.woba)+"</td><td>"+mv(isBA?d.xba:d.xwoba)+"</td>"+
+      "<td>"+fp(rel(d))+"</td>"+
+      (isBA?"<td>"+fp(d.adj_gap)+"</td>":"<td>"+(d.woba_n==null?"—":fi(d.woba_n))+"</td>")+
       (hasK?("<td>"+(d.k_pct?d3.format(".1%")(d.k_pct):"—")+"</td><td>"+
         (d.k_pf==null?"—":d3.format(".3f")(d.k_pf))+"</td>"):"")+
       "<td>"+(d.carry_ft==null?"—":f1(d.carry_ft))+"</td>");
@@ -1856,17 +1865,18 @@ function renderSectionCounts(){
   const cell=lgSpray.filter(d=>d.ev_band===BAND.ev_band&&d.la_band===BAND.la_band);
   const fm=fieldMap.filter(d=>d.park===PARK);
   const set=(id,txt)=>d3.select("#"+id).text(txt?" / "+txt:"");
-  set("nBlind", fi(d3.sum(cell,d=>d.n))+" balls in this cell");
-  set("nGradient", fi(d3.sum(fm,d=>d.n))+" placed, median "+
-      (fm.length?fi(Math.round(d3.median(fm,d=>d.n))):0)+" per bin");
+  set("nBlind", fi(d3.sum(cell,MET.n))+" balls in this cell");
+  set("nGradient", fi(d3.sum(fm,MET.n))+" placed, median "+
+      (fm.length?fi(Math.round(d3.median(fm,MET.n))):0)+" per bin");
   set("nPhysics", s.carry_n?fi(s.carry_n)+" hit in the air":"");
   set("nMissing", s.bip?fi(s.bip)+" balls in play":"");
   set("nCost", s.woba_n?fi(s.woba_n)+" in the wOBA denominator":"");
   set("nStrikeouts", s.k_pa?fi(s.k_pa)+" plate appearances":"");
-  set("nLedger", fi(d3.sum(summary,d=>d.bip))+" across "+summary.length+" parks");
+  set("nLedger", fi(d3.sum(summary,d=>MET.id==="ba"?d.bip:d.woba_n))+
+      " across "+summary.length+" parks");
   const ps=parkSeason.filter(d=>d.park===PARK);
   set("nSeason", ps.length?ps.length+" seasons, "+
-      fi(Math.round(d3.mean(ps,d=>d.bip)))+" balls each":"");
+      fi(Math.round(d3.mean(ps,d=>MET.id==="ba"?d.bip:d.woba_n)))+" balls each":"");
   set("nPrecision", "95% intervals");
 }
 
@@ -1893,6 +1903,9 @@ function renderAll(){
   d3.select("#rankTitle").html(MET.act+" &minus; "+MET.exp+" relative to league");
   d3.select("#rampFieldLo").text("−"+MET.fanExt.toFixed(2).slice(1));
   d3.select("#rampFieldHi").text("+"+MET.fanExt.toFixed(2).slice(1));
+  d3.select("#gradientMetric").text(MET.exp);
+  d3.select("#sprayRuleMetric").text(MET.exp);
+  d3.select("#ledgerMetric").text(MET.exp);
   d3.select("#fieldNote").html("Colour is "+MET.act+"&nbsp;&minus;&nbsp;"+MET.exp+
     " within each bin, on a wider scale than the park totals above &mdash; single "+
     "locations swing much harder than a whole ballpark does.");
